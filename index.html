@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lemonade performance · Backend regression dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+/* ---- Nocturne design tokens (from the Claude Design system) ---- */
+:root{
+  --color-bg:#161826;
+  --color-surface:#232532;
+  --color-surface-2:#292b31;
+  --color-text:#e9e9ed;
+  --color-accent:#9184d9;
+  --color-accent-2:#a7a1db;
+  --color-divider:color-mix(in srgb, #e9e9ed 16%, transparent);
+  --color-neutral-600:#75798c;
+  --color-warn:#e0b25a;
+  --color-err:#e0625a;
+  --radius-sm:4px;--radius-md:8px;--radius-lg:14px;
+  --shadow-sm:0 0 0 1px #3f424d;
+  --shadow-md:0 0 0 1px #595d6c,0 6px 18px rgba(0,0,0,0.55);
+  --space-1:2.8px;--space-2:5.6px;--space-3:8.4px;--space-4:11.2px;--space-6:16.8px;--space-8:22.4px;
+  --font:'Inter',system-ui,-apple-system,sans-serif;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{background:var(--color-bg)}
+body{font-family:var(--font);color:var(--color-text);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;cursor:pointer;background:none;border:0}
+a{color:var(--color-accent);text-decoration:none;text-underline-offset:3px}
+a:hover{text-decoration:underline}
+button:focus-visible,a:focus-visible{outline:2px solid var(--color-accent);outline-offset:2px}
+.num{font-variant-numeric:tabular-nums}
+.muted{color:color-mix(in srgb, var(--color-text) 55%, transparent)}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;flex:none}
+
+/* ---- nav ---- */
+.nav{display:flex;align-items:center;gap:16px;border-bottom:1px solid var(--color-divider);
+  padding:0 32px;height:56px}
+.nav-brand{font-size:15px;font-weight:600;letter-spacing:-.01em}
+.nav-spacer{margin-left:auto}
+.nav a.repo{font-size:13.5px;color:color-mix(in srgb, var(--color-text) 62%, transparent)}
+.btn{display:inline-flex;align-items:center;gap:7px;padding:8px 14px;font-size:13.5px;
+  border:1px solid var(--color-divider);border-radius:var(--radius-md);color:var(--color-text);
+  transition:background .12s,border-color .12s}
+.btn:hover{background:color-mix(in srgb, var(--color-text) 7%, transparent)}
+.hw-select{margin-left:6px;background:var(--color-surface);border:1px solid var(--color-divider);
+  border-radius:var(--radius-md);color:var(--color-text);font:inherit;font-size:13px;
+  padding:6px 30px 6px 11px;appearance:none;cursor:pointer;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239397ab' fill='none' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 11px center}
+.hw-select:hover{border-color:color-mix(in srgb, var(--color-text) 40%, transparent)}
+
+/* system / version band */
+.sysbar{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:28px;
+  padding:14px 16px;border:1px solid var(--color-divider);border-radius:var(--radius-md);
+  background:color-mix(in srgb, var(--color-surface) 55%, transparent)}
+.sysgrp{display:flex;flex-direction:column;gap:2px;min-width:0}
+.sys-k{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--color-accent)}
+.sys-v{font-size:13.5px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sys-m{font-size:11.5px;color:color-mix(in srgb, var(--color-text) 50%, transparent);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ---- page ---- */
+.page{max-width:1180px;margin:0 auto;padding:40px 32px 80px}
+header.hero{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;
+  flex-wrap:wrap;margin-bottom:28px}
+h1{font-size:26px;font-weight:600;letter-spacing:-.015em}
+.hero .sub{font-size:14px;color:color-mix(in srgb, var(--color-text) 55%, transparent);margin-top:5px}
+.tag{font-size:12.5px;padding:6px 12px;border-radius:var(--radius-md);white-space:nowrap}
+.tag-neutral{color:color-mix(in srgb, var(--color-text) 70%, transparent);background:var(--color-surface);
+  box-shadow:var(--shadow-sm)}
+.tag-outline{color:var(--color-warn);border:1px solid color-mix(in srgb, var(--color-warn) 55%, transparent)}
+
+/* ---- stat cards ---- */
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:28px}
+.card{display:flex;flex-direction:column;gap:var(--space-2);padding:var(--space-6);
+  border-radius:var(--radius-md);background:var(--color-surface);box-shadow:var(--shadow-sm)}
+.card-kicker{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--color-accent)}
+.card-title{font-size:22px;font-weight:600;letter-spacing:-.01em}
+.card-meta{font-size:12.5px;color:color-mix(in srgb, var(--color-text) 50%, transparent)}
+
+/* ---- toolbar ---- */
+.toolbar{display:flex;justify-content:space-between;align-items:center;gap:16px;
+  flex-wrap:wrap;margin-bottom:20px}
+.seg{display:inline-flex;border:1px solid var(--color-divider);border-radius:var(--radius-md)}
+.seg-opt{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;font-size:13px;
+  color:color-mix(in srgb, var(--color-text) 72%, transparent);position:relative;cursor:pointer}
+.seg-opt+.seg-opt{border-left:1px solid var(--color-divider)}
+.seg-opt:hover:not(.on):not(.disabled){background:color-mix(in srgb, var(--color-text) 7%, transparent)}
+.seg-opt.on{color:var(--color-accent);box-shadow:inset 0 0 0 1px var(--color-accent)}
+.seg-opt.disabled{opacity:.55;cursor:not-allowed}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;border-radius:999px;
+  padding:6px 13px;cursor:pointer;border:1px solid var(--color-divider);background:transparent;
+  color:color-mix(in srgb, var(--color-text) 55%, transparent);transition:border-color .12s,color .12s}
+.chip:hover:not(.disabled){color:var(--color-text);border-color:color-mix(in srgb, var(--color-text) 40%, transparent)}
+.chip.on{color:var(--color-text);border-color:color-mix(in srgb, var(--color-text) 40%, transparent);background:var(--color-surface)}
+.chip.disabled{opacity:.55;cursor:not-allowed}
+.soon{font-size:10px;letter-spacing:.04em;color:var(--color-err);margin-left:2px}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(224,98,90,.55)}70%{box-shadow:0 0 0 6px rgba(224,98,90,0)}100%{box-shadow:0 0 0 0 rgba(224,98,90,0)}}
+.pulse{width:7px;height:7px;border-radius:50%;background:var(--color-err);display:inline-block;
+  animation:pulse 1.6s ease-out infinite;flex:none}
+
+/* ---- table ---- */
+.thead,.trow{display:grid;gap:8px;align-items:center}
+.thead{padding:8px;border-bottom:1px solid var(--color-divider)}
+.col-h{font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+  color:color-mix(in srgb, var(--color-text) 60%, transparent)}
+.col-h.r{text-align:right}
+.trow{padding:12px 8px;border-bottom:1px solid var(--color-divider);cursor:pointer}
+.trow:hover{background:color-mix(in srgb, var(--color-text) 4%, transparent)}
+.caret{display:inline-flex;color:color-mix(in srgb, var(--color-text) 45%, transparent);
+  transition:transform .15s;flex:none}
+.mname{font-size:13.5px;font-weight:500}
+.cellv{text-align:right;font-size:13.5px}
+.cellv.strong{font-weight:600;color:var(--color-text)}
+
+/* ---- expanded detail ---- */
+.detail{padding:16px 20px 24px 34px;margin:2px 0 10px;background:var(--color-surface);
+  border-radius:var(--radius-md);box-shadow:var(--shadow-sm)}
+.drow{display:grid;grid-template-columns:1.4fr .85fr .55fr .55fr .55fr .38fr .5fr .65fr .65fr .32fr .4fr;gap:8px;
+  padding:var(--space-2);align-items:center;border-bottom:1px solid var(--color-divider)}
+.drow.head span{font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+  color:color-mix(in srgb, var(--color-text) 60%, transparent)}
+.drow .r{text-align:right}
+.drow.repro-open{border-bottom:0}
+.brepo{display:block;font-size:11.5px;margin:2px 0 0 14px;
+  color:color-mix(in srgb, var(--color-text) 50%, transparent)}
+
+/* per-row reproduce toggle + inline panel */
+.repro-btn{font-family:ui-monospace,monospace;font-size:11px;line-height:1;padding:4px 7px;
+  border:1px solid var(--color-divider);border-radius:var(--radius-sm);
+  color:color-mix(in srgb, var(--color-text) 55%, transparent);transition:all .12s}
+.repro-btn:hover{color:var(--color-text);border-color:color-mix(in srgb, var(--color-text) 40%, transparent)}
+.repro-btn.on{color:var(--color-accent);border-color:var(--color-accent)}
+.repro-inline{border-bottom:1px solid var(--color-divider);padding:0 0 12px}
+.repro-body{position:relative;margin:4px 0 0}
+.repro-body pre{background:var(--color-bg);border:1px solid var(--color-divider);
+  border-radius:var(--radius-md);padding:14px 16px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-size:12px;line-height:1.6;color:color-mix(in srgb, var(--color-text) 85%, transparent);
+  overflow-x:auto;white-space:pre}
+.repro-copy{position:absolute;top:8px;right:8px;font-size:11px;padding:4px 10px;
+  border:1px solid var(--color-divider);border-radius:var(--radius-sm);
+  color:color-mix(in srgb, var(--color-text) 65%, transparent);background:var(--color-surface)}
+.repro-copy:hover{color:var(--color-text);border-color:color-mix(in srgb, var(--color-text) 40%, transparent)}
+
+/* history metric tabs */
+.mtabs{display:inline-flex;gap:2px;border:1px solid var(--color-divider);border-radius:var(--radius-md);
+  padding:2px;margin:0 0 12px}
+.mtab{padding:5px 12px;font-size:12px;border-radius:var(--radius-sm);
+  color:color-mix(in srgb, var(--color-text) 62%, transparent)}
+.mtab:hover:not(:disabled):not(.on){color:var(--color-text)}
+.mtab.on{background:var(--color-surface-2);color:var(--color-text)}
+.mtab:disabled{opacity:.4;cursor:not-allowed}
+
+.chart-title{font-size:12px;color:color-mix(in srgb, var(--color-text) 55%, transparent);
+  margin:20px 0 12px;padding-top:16px;border-top:1px solid var(--color-divider)}
+.chart{position:relative}
+.axis{font-size:11px;fill:color-mix(in srgb, var(--color-text) 50%, transparent);font-family:var(--font)}
+.chart-foot{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-top:8px}
+.legend{display:flex;gap:16px;flex-wrap:wrap}
+.legend i{width:13px;height:3px;border-radius:2px;margin-right:6px;display:inline-block}
+.legend span{font-size:12px;color:color-mix(in srgb, var(--color-text) 70%, transparent);
+  display:inline-flex;align-items:center}
+.reg-note{font-size:12px;color:var(--color-accent)}
+
+.tip{position:fixed;background:var(--color-surface);border:1px solid var(--color-divider);
+  border-radius:var(--radius-md);padding:8px 12px;font-size:12.5px;color:var(--color-text);
+  pointer-events:none;z-index:99;box-shadow:var(--shadow-md)}
+.tip b{font-weight:600}
+.tip .th{display:block;color:color-mix(in srgb, var(--color-text) 60%, transparent);
+  margin-bottom:2px;font-size:11.5px}
+
+.empty{color:color-mix(in srgb, var(--color-text) 55%, transparent);text-align:center;padding:32px 0}
+.loading{color:color-mix(in srgb, var(--color-text) 55%, transparent);text-align:center;padding:60px 0}
+.errbox{background:rgba(224,98,90,.08);border:1px solid rgba(224,98,90,.3);border-radius:var(--radius-md);
+  padding:18px 20px;color:color-mix(in srgb, var(--color-text) 75%, transparent);font-size:13.5px}
+.errbox code{background:var(--color-surface-2);padding:2px 6px;border-radius:4px;
+  font-family:ui-monospace,monospace;font-size:12.5px;color:var(--color-text)}
+footer{margin-top:32px;font-size:12px;text-align:center;color:color-mix(in srgb, var(--color-text) 55%, transparent)}
+footer a{color:color-mix(in srgb, var(--color-text) 70%, transparent)}
+
+@media(max-width:760px){
+  .page{padding:28px 18px 56px}
+  .stats{grid-template-columns:1fr}
+  .sysbar{grid-template-columns:1fr}
+  .drow{grid-template-columns:1.4fr .7fr .6fr .6fr .5fr}
+  .drow .c-vram,.drow .c-ctx,.drow .c-run,.drow .c-q,.drow .c-repro{display:none}
+}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<!-- __LEADERBOARD_DATA__ : ci/gen_dashboard.py replaces this line with an
+     inline <script>window.__LEADERBOARD__=...</script> for a self-contained
+     build. Left as a comment in the template so local fetch mode still works. -->
+<script type="text/babel">
+const {useState,useEffect}=React;
+
+/* ------------------------------------------------------------------ *
+ * DATA SOURCE — two modes:
+ *  1. EMBEDDED (published): gen_dashboard.py injects window.__LEADERBOARD__.
+ *  2. FETCH (local dev): pull the CI-published leaderboard.json from the
+ *     benchmark-data branch. Override with ?data=<url>.
+ * Schema: { generated_at, run_id, run_url, repo, repo_url, actions_url, commit,
+ *   by_model_scenario: { "model|scenario": [ {fork_id, fork_label, fork_repo,
+ *     fork_version, backend, ctx_size, tps_mean, ttft_ms_mean, vram_peak_gb,
+ *     run_url, ...} ] },
+ *   history: { model: { scenario: { fork_id: [ {version,timestamp,tps_mean,
+ *     ttft_ms_mean,run_url} ] } } } }
+ * ------------------------------------------------------------------ */
+const params=new URLSearchParams(location.search);
+const DEFAULT_DATA_URL=
+  'https://raw.githubusercontent.com/lemonade-sdk/lemonade/benchmark-data/leaderboard.json';
+const DATA_URL=params.get('data')||DEFAULT_DATA_URL;
+
+/* Fork colors — oklch hues from the Nocturne design (mono-purple family). */
+const FORK_HUES={
+  'llamacpp-upstream-vulkan':289,
+  'llamacpp-amd-ecosystem-gfx11':350,
+  'llamacpp-rocm-nightly':60,
+  'llamacpp-rocm-stable':200,
+  'llamacpp-upstream-cuda':320,
+  'vllm-nightly':90,
+};
+function colorFor(id){
+  if(FORK_HUES[id]!=null)return `oklch(66% 0.125 ${FORK_HUES[id]})`;
+  let h=7;for(const c of id)h=(h*31+c.charCodeAt(0))|0;
+  return `oklch(66% 0.125 ${Math.abs(h*47)%360})`;
+}
+function shortLabel(lbl,id){
+  if(lbl)return lbl.replace(/^llama\.?cpp\s*/i,'').replace(/\(.*\)/,'').trim()||lbl;
+  return id;
+}
+const fmtTtft=v=>v==null?'—':(v<2000?`${Math.round(v)} ms`:`${(v/1000).toFixed(1)} s`);
+const fmtTps=v=>v==null?'—':v.toFixed(1);
+
+function indexData(lb){
+  const bms=lb.by_model_scenario||{};
+  const models=new Map(),scenarios=new Set(),forks=new Map();
+  const perf={};
+  for(const key of Object.keys(bms)){
+    const list=bms[key];if(!list||!list.length)continue;
+    const [model,scenario]=key.split('|');
+    scenarios.add(scenario);
+    if(!models.has(model))models.set(model,{id:model});
+    for(const e of list){
+      if(!forks.has(e.fork_id))forks.set(e.fork_id,{
+        id:e.fork_id,label:e.fork_label||e.fork_id,
+        short:shortLabel(e.fork_label,e.fork_id),
+        repo:e.fork_repo||'',version:e.fork_version||'',color:colorFor(e.fork_id)});
+      else{const f=forks.get(e.fork_id);if(e.fork_version)f.version=e.fork_version;}
+      perf[model]=perf[model]||{};
+      perf[model][scenario]=perf[model][scenario]||{};
+      perf[model][scenario][e.fork_id]=e;
+    }
+  }
+  return {
+    models:[...models.values()].sort((a,b)=>a.id.localeCompare(b.id)),
+    scenarios:[...scenarios].sort(),
+    forks:[...forks.values()],
+    perf, history:lb.history||{}, meta:lb,
+  };
+}
+
+function regInfo(series){
+  if(!series||series.length<2)return null;
+  const a=series[series.length-2],b=series[series.length-1];
+  if(a.tps_mean>0 && b.tps_mean<a.tps_mean*0.97)
+    return {at:b.version,pct:(b.tps_mean-a.tps_mean)/a.tps_mean*100};
+  return null;
+}
+function regsFor(D,modelId){
+  const out=[];const hist=D.history[modelId]||{};
+  for(const scn of Object.keys(hist))
+    for(const fid of Object.keys(hist[scn])){
+      const r=regInfo(hist[scn][fid]);
+      if(r){const f=D.forks.find(x=>x.id===fid);out.push({scenario:scn,fork:f||{id:fid,short:fid},...r});}
+    }
+  return out;
+}
+
+/* ---------------------------- trend chart ---------------------------- */
+const HIST_METRICS=[
+  {key:'tps_mean',   label:'tok/s', unit:'tok/s', better:'up'},
+  {key:'ttft_ms_mean',label:'TTFT',  unit:'ms',    better:'down'},
+  {key:'vram_peak_gb',label:'VRAM',  unit:'GB',    better:'down'},
+];
+function TrendChart({D,model,scenario,forks}){
+  const [tip,setTip]=useState(null);
+  const [metricKey,setMetricKey]=useState('tps_mean');
+  const metric=HIST_METRICS.find(m=>m.key===metricKey);
+  const W=860,H=190,PL=48,PR=16,PT=14,PB=30,cw=W-PL-PR,ch=H-PT-PB;
+  const hist=(D.history[model.id]||{})[scenario]||{};
+  // a metric is available only if at least one point has a non-null value
+  const metricHas=k=>forks.some(f=>(hist[f.id]||[]).some(p=>p[k]!=null));
+  const series=forks.map(f=>({f,data:(hist[f.id]||[]).filter(p=>p[metricKey]!=null)})).filter(s=>s.data.length);
+  const tabs=(
+    <div className="mtabs">
+      {HIST_METRICS.map(m=>{
+        const avail=metricHas(m.key);
+        return <button key={m.key} className={`mtab ${metricKey===m.key?'on':''}`}
+          disabled={!avail} title={avail?'':'no data for this metric yet'}
+          onClick={()=>avail&&setMetricKey(m.key)}>{m.label}</button>;
+      })}
+    </div>);
+  if(!series.length)return(<div>{tabs}
+    <p className="muted" style={{fontSize:12.5,padding:'8px 0'}}>
+      No {metric.label} history yet — {metricKey==='vram_peak_gb'?'VRAM populates from real CI runs':'charts populate after a few nightly runs'}.
+    </p></div>);
+  // X-axis is one slot per REGRESSION RUN (nightly). All backends benchmarked in
+  // the same run share a run_id, so they land on one vertical; each subsequent
+  // run adds a new x-slot, building the trend across runs. Runs ordered by date.
+  const runKey=p=>p.run_id||p.timestamp||p.version||'?';
+  const runDate={};
+  for(const s of series)for(const p of s.data){
+    const k=runKey(p),t=p.timestamp||'';
+    if(!(k in runDate)||t<runDate[k])runDate[k]=t;
+  }
+  // show at most the last MAX_RUNS regression runs on the x-axis
+  const MAX_RUNS=5;
+  const runs=Object.keys(runDate)
+    .sort((a,b)=>(runDate[a]||'').localeCompare(runDate[b]||''))
+    .slice(-MAX_RUNS);
+  const runSet=new Set(runs);
+  // collapse each fork's series to its latest point within each (windowed) run
+  const collapse=data=>{
+    const byR={};
+    for(const p of data){const k=runKey(p);
+      if(!runSet.has(k))continue;
+      if(!byR[k]||(p.timestamp||'')>(byR[k].timestamp||''))byR[k]=p;}
+    return runs.filter(k=>byR[k]).map(k=>({...byR[k],_k:k}));
+  };
+  // "known best" per fork = best value across ALL runs (not just the window):
+  // max for tok/s, min for TTFT/VRAM. Used to draw a dashed reference line.
+  const better=metric.better; // 'up' or 'down'
+  const bestByFork={};
+  for(const s of series){
+    const vals=s.data.map(p=>p[metricKey]).filter(v=>v!=null);
+    if(vals.length)bestByFork[s.f.id]=better==='up'?Math.max(...vals):Math.min(...vals);
+  }
+  const bestVals=Object.values(bestByFork);
+  const winVals=series.flatMap(s=>collapse(s.data).map(p=>p[metricKey]));
+  const all=[...winVals,...bestVals];
+  const mn=Math.min(...all)*.95,mx=Math.max(...all)*1.03||1;
+  const xi=k=>runs.indexOf(k);
+  const x=k=>PL+(runs.length<2?0.5:xi(k)/(runs.length-1))*cw;
+  const y=v=>PT+ch-((v-mn)/((mx-mn)||1))*ch;
+  const runLabel=k=>{const d=runDate[k]||'';return d?d.slice(5,10):String(k).slice(0,6);};
+  const fmtVal=v=>metricKey==='ttft_ms_mean'?fmtTtft(v):(metricKey==='vram_peak_gb'?v.toFixed(1)+' GB':v.toFixed(1));
+  // regressions only meaningful for tok/s (up is better)
+  const regs=metricKey==='tps_mean'?series.map(s=>({f:s.f,r:regInfo(collapse(s.data))})).filter(s=>s.r):[];
+  return(
+    <div className="chart">
+      {tabs}
+      <svg viewBox={`0 0 ${W} ${H}`} style={{width:'100%',display:'block',overflow:'visible'}}>
+        {[0,.5,1].map((f,i)=>{const v=mn+f*(mx-mn);return(
+          <g key={i}>
+            <line x1={PL} y1={y(v)} x2={PL+cw} y2={y(v)} stroke="var(--color-divider)" strokeWidth="1"/>
+            <text x={PL-10} y={y(v)+4} textAnchor="end" className="axis">{v.toFixed(0)}</text>
+          </g>)})}
+        {runs.map(k=><text key={k} x={x(k)} y={H-6} textAnchor="middle" className="axis">{runLabel(k)}</text>)}
+        {series.map(({f})=>{
+          const bv=bestByFork[f.id];if(bv==null)return null;
+          return <line key={'best-'+f.id} x1={PL} y1={y(bv)} x2={PL+cw} y2={y(bv)}
+            stroke={f.color} strokeWidth="1" strokeDasharray="3 4" opacity="0.4"/>;
+        })}
+        {series.map(({f,data})=>{
+          const pts=collapse(data).map(p=>({X:x(p._k),Y:y(p[metricKey]),...p}));
+          return(
+            <g key={f.id}>
+              <path d={pts.map((p,i)=>`${i?'L':'M'}${p.X},${p.Y}`).join(' ')}
+                fill="none" stroke={f.color} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
+              {pts.map((p,i)=>(
+                <circle key={i} cx={p.X} cy={p.Y} r="3.25" fill="var(--color-surface)" stroke={f.color} strokeWidth="1.75"
+                  style={{cursor:p.run_url?'pointer':'default'}}
+                  onMouseEnter={e=>setTip({x:e.clientX,y:e.clientY,f,p})}
+                  onMouseLeave={()=>setTip(null)}
+                  onClick={()=>p.run_url&&window.open(p.run_url,'_blank')}/>))}
+            </g>);
+        })}
+      </svg>
+      <div className="chart-foot">
+        <div className="legend">
+          {series.map(({f})=>(<span key={f.id}><i style={{background:f.color}}/>{f.short}</span>))}
+          <span className="muted" style={{display:'inline-flex',alignItems:'center'}}>
+            <i style={{background:'transparent',borderTop:'1px dashed currentColor',height:0,opacity:.6}}/>
+            known best (all runs)
+          </span>
+        </div>
+        {regs.length>0&&(
+          <div className="reg-note">
+            {regs.map(({f,r})=>`${f.short} regressed at ${r.at} (${r.pct.toFixed(1)}%)`).join('  ·  ')}
+          </div>)}
+      </div>
+      {tip&&(
+        <div className="tip" style={{left:tip.x+14,top:tip.y-46}}>
+          <span className="th">{tip.f.short} · build {tip.p.version}{tip.p.run_url?' · click to open run':''}</span>
+          {(tip.p.timestamp||'').slice(0,10)} · <b>{fmtVal(tip.p[metricKey])}</b>
+        </div>)}
+    </div>
+  );
+}
+
+/* Build the exact bash commands to reproduce a model×fork bench run. */
+function reproCommands(D,model,fork,d,scenario){
+  const repo=fork.repo||'<fork-repo>';
+  const ver=d.fork_version||fork.version||'<version>';
+  const backend=d.backend||'rocm';            // real llamacpp key: rocm/vulkan/cpu
+  const channel=(backend==='rocm')?(/nightly/i.test(fork.id)?'nightly':/stable/i.test(fork.id)?'stable':'nightly'):'';
+  const ctx=d.ctx_size||4096;
+  const scen=D.scenarios.join(' ');
+  const lines=[];
+  lines.push(`# Reproduce: ${model.id} on ${fork.label||fork.id} (${ver})`);
+  lines.push(`# 1. Download this fork's prebuilt llama-server (release ${ver})`);
+  lines.push(`#    from https://github.com/${repo}/releases/tag/${ver}`);
+  lines.push(`#    and extract it; note the FULL path to the 'llama-server' file.`);
+  lines.push(`BIN=/path/to/${fork.id}/llama-server`);
+  lines.push(``);
+  lines.push(`# 2. Point lemond at that binary (FILE path, not a directory)`);
+  if(channel)lines.push(`lemonade config set rocm_channel=${channel}`);
+  lines.push(`lemonade config set llamacpp.${backend}_bin=$BIN`);
+  lines.push(`lemonade backends --all | grep llamacpp   # ${backend} should say "installed"`);
+  lines.push(``);
+  lines.push(`# 3. Run the identical benchmark`);
+  lines.push(`lemonade bench ${model.id} \\`);
+  lines.push(`  --backend ${backend} \\`);
+  lines.push(`  --scenarios ${scen} \\`);
+  lines.push(`  --runs 5 --warmup 1 --auto-pull --json \\`);
+  lines.push(`  --output run.json`);
+  return lines.join('\n');
+}
+
+function ReproPanel({cmd}){
+  const [copied,setCopied]=useState(false);
+  const copy=()=>{navigator.clipboard?.writeText(cmd).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),1400);});};
+  return(
+    <div className="repro-inline">
+      <div className="repro-body">
+        <button className="repro-copy" onClick={copy}>{copied?'copied ✓':'copy'}</button>
+        <pre>{cmd}</pre>
+      </div>
+    </div>
+  );
+}
+
+/* -------------------------- expanded detail -------------------------- */
+function Detail({D,model,scenario,forks}){
+  const [reproFor,setReproFor]=useState(null); // fork_id whose repro is open
+  const scen=(D.perf[model.id]||{})[scenario]||{};
+  const vals=forks.map(f=>scen[f.id]).filter(Boolean);
+  const maxTps=vals.length?Math.max(...vals.map(v=>v.tps_mean)):0;
+  const rows=[...forks].sort((a,b)=>a.id.localeCompare(b.id));
+  const fmtQ=v=>v==null?'—':(typeof v==='number'?v.toFixed(2):v);
+  const toggleRepro=id=>setReproFor(cur=>cur===id?null:id);
+  return(
+    <div className="detail">
+      <div className="drow head">
+        <span>Backend</span><span>Build</span><span className="r">tok/s</span>
+        <span className="r">TTFT</span><span className="r c-vram">VRAM</span>
+        <span className="r c-ctx">ctx</span>
+        <span className="r c-q">MMLU</span><span className="r c-q">Perplexity</span>
+        <span className="r">vs fastest</span><span className="r c-run">run</span>
+        <span className="r c-repro">repro</span>
+      </div>
+      {rows.map(f=>{
+        const d=scen[f.id];
+        if(!d)return(
+          <div className="drow" key={f.id}>
+            <span><span className="dot" style={{background:f.color,marginRight:7,verticalAlign:1}}/>{f.short}</span>
+            <span className="muted num">{f.version||'—'}</span>
+            <span className="r muted">no data</span><span/><span className="c-vram"/><span className="c-ctx"/>
+            <span className="c-q"/><span className="c-q"/><span/><span className="c-run"/><span className="c-repro"/>
+          </div>);
+        const fast=maxTps>0&&d.tps_mean>=maxTps*.999;
+        const gap=maxTps>0?(d.tps_mean-maxTps)/maxTps*100:0;
+        const open=reproFor===f.id;
+        return(
+          <React.Fragment key={f.id}>
+          <div className={`drow ${open?'repro-open':''}`}>
+            <span>
+              <span className="dot" style={{background:f.color,marginRight:7,verticalAlign:1}}/>{f.short}
+              {f.repo&&<a className="brepo" href={`https://github.com/${f.repo}`} target="_blank">{f.repo}</a>}
+            </span>
+            <span className="muted num">{d.fork_version||f.version||'—'}</span>
+            <span className={`r num ${fast?'cellv strong':''}`}>{fmtTps(d.tps_mean)}</span>
+            <span className="r num">{fmtTtft(d.ttft_ms_mean)}</span>
+            <span className="r num c-vram">{d.vram_peak_gb==null?'—':d.vram_peak_gb.toFixed(1)+' GB'}</span>
+            <span className="r num muted c-ctx">{d.ctx_size||'—'}</span>
+            <span className="r num muted c-q" title="Quality eval not yet collected">{fmtQ(d.mmlu)}</span>
+            <span className="r num muted c-q" title="Quality eval not yet collected">{fmtQ(d.perplexity??d.ppl)}</span>
+            <span className={`r num ${fast?'cellv strong':'muted'}`}>{fast?'fastest':gap.toFixed(1)+'%'}</span>
+            <span className="r num c-run">{d.run_url?<a href={d.run_url} target="_blank">↗</a>:'—'}</span>
+            <span className="r c-repro">
+              <button className={`repro-btn ${open?'on':''}`} onClick={()=>toggleRepro(f.id)}
+                title="Show commands to reproduce this run">{'</>'}</button>
+            </span>
+          </div>
+          {open&&<ReproPanel cmd={reproCommands(D,model,f,d,scenario)}/>}
+          </React.Fragment>);
+      })}
+
+      <div className="chart-title">Build history · {scenario}</div>
+      <TrendChart D={D} model={model} scenario={scenario} forks={forks}/>
+    </div>
+  );
+}
+
+/* --------------------------------- app --------------------------------- */
+function Dashboard({D,snapshots,snapSha,onSnapshot}){
+  const [scenario,setScenario]=useState(D.scenarios[0]||'chat-short');
+  const [filtered,setFiltered]=useState(()=>Object.fromEntries(D.forks.map(f=>[f.id,true])));
+  const [expanded,setExpanded]=useState(()=>new Set(D.models.length?[D.models[0].id]:[]));
+
+  // Hardware selector — grouped from the run hardware block(s). Only the
+  // machines that actually reported results appear (no fabricated hardware).
+  const systems=D.meta.systems||(D.meta.system?[D.meta.system]:[]);
+  const hwOptions=systems.length
+    ? systems.map((s,i)=>({id:s.id||`hw${i}`,label:s.hwLabel||s.gpu||`Hardware ${i+1}`,sys:s}))
+    : [{id:'default',label:'Strix Halo · gfx1151',sys:{}}];
+  const [hwId,setHwId]=useState(hwOptions[0].id);
+  const sys=(hwOptions.find(h=>h.id===hwId)||hwOptions[0]).sys;
+
+  const vis=D.forks.filter(f=>filtered[f.id]);
+  const allRegs=D.models.flatMap(m=>regsFor(D,m.id));
+  const toggleModel=id=>setExpanded(e=>{const n=new Set(e);n.has(id)?n.delete(id):n.add(id);return n});
+  const toggleFilter=id=>setFiltered(f=>({...f,[id]:!f[id]}));
+
+  const gen=D.meta.generated_at?new Date(D.meta.generated_at).toISOString().replace('T',' ').slice(0,16)+' UTC':'—';
+  const commit=(D.meta.commit||'').slice(0,7);
+  const gridCols=`26px 1.4fr repeat(${Math.max(vis.length,1)}, minmax(90px,1fr))`;
+
+  // scenario segmented control: real scenarios + a disabled "long-context soon"
+  const segItems=[...D.scenarios.map(s=>({id:s,disabled:false})),
+                  {id:'long-context',disabled:true}];
+
+  return(
+    <div style={{background:'var(--color-bg)',minHeight:'100vh'}}>
+      <div className="nav">
+        <span className="nav-brand">Lemonade performance</span>
+        <select className="hw-select" value={hwId} onChange={e=>setHwId(e.target.value)} title="Benchmark hardware">
+          {hwOptions.map(h=><option key={h.id} value={h.id}>{h.label}</option>)}
+        </select>
+        {snapshots&&snapshots.length>0&&(
+          <select className="hw-select" value={snapSha} onChange={e=>onSnapshot(e.target.value)}
+            title="Rewind to an earlier nightly run">
+            <option value="latest">Latest run</option>
+            {snapshots.map(s=><option key={s.sha} value={s.sha}>{s.label}</option>)}
+          </select>
+        )}
+        <span className="nav-spacer"/>
+        {snapSha!=='latest'&&<span className="tag tag-outline" style={{padding:'4px 10px'}}>viewing snapshot</span>}
+        {D.meta.repo&&<a className="repo" href={D.meta.repo_url} target="_blank">{D.meta.repo}</a>}
+        {D.meta.actions_url&&<a className="btn" href={D.meta.actions_url} target="_blank">CI workflow ↗</a>}
+      </div>
+
+      <div className="page">
+        <header className="hero">
+          <div>
+            <h1>Backend regression dashboard</h1>
+            <p className="sub">Nightly inference benchmarks across bring-your-own-backend forks</p>
+          </div>
+          {allRegs.length
+            ?<span className="tag tag-outline">{allRegs.length} regression{allRegs.length>1?'s':''}</span>
+            :<span className="tag tag-neutral">All stable</span>}
+        </header>
+
+        <div className="stats">
+          <div className="card">
+            <span className="card-kicker">Health</span>
+            <span className="card-title">{allRegs.length?`${allRegs.length} regression${allRegs.length>1?'s':''}`:'All stable'}</span>
+            <span className="card-meta">across all tracked model × backend pairs</span>
+          </div>
+          <div className="card">
+            <span className="card-kicker">Models tracked</span>
+            <span className="card-title num">{D.models.length}</span>
+            <span className="card-meta">grows automatically from leaderboard data</span>
+          </div>
+          <div className="card">
+            <span className="card-kicker">Backends tracked</span>
+            <span className="card-title num">{D.forks.length}</span>
+            <span className="card-meta">forks currently reporting results</span>
+          </div>
+        </div>
+
+        <div className="sysbar">
+          <div className="sysgrp">
+            <span className="sys-k">Hardware</span>
+            <span className="sys-v">{sys.gpu||sys.hwLabel||'—'}</span>
+            <span className="sys-m">{[sys.cpu,sys.vram_gb?`${sys.vram_gb} GB VRAM`:null,sys.os].filter(Boolean).join(' · ')||'from run hardware block'}</span>
+          </div>
+          <div className="sysgrp">
+            <span className="sys-k">Lemonade</span>
+            <span className="sys-v">{sys.lemonade_version||sys.lemond_version||'—'}</span>
+            <span className="sys-m">{sys.lemond_version?`lemond ${sys.lemond_version}`:'server + CLI build'}</span>
+          </div>
+          <div className="sysgrp">
+            <span className="sys-k">Default llama.cpp backend</span>
+            <span className="sys-v">{sys.default_backend||'auto'}{sys.rocm_channel?` · rocm ${sys.rocm_channel}`:''}</span>
+            <span className="sys-m">
+              {sys.backend_versions
+                ? Object.entries(sys.backend_versions).map(([k,v])=>`${k} ${v}`).join(' · ')
+                : 'pinned in backend_versions.json'}
+            </span>
+          </div>
+        </div>
+
+        <div className="toolbar">
+          <div className="seg">
+            {segItems.map(s=>(
+              <div key={s.id}
+                className={`seg-opt ${s.id===scenario?'on':''} ${s.disabled?'disabled':''}`}
+                onClick={()=>!s.disabled&&setScenario(s.id)}>
+                {s.id}
+                {s.disabled&&<><span className="pulse" title="Not ready yet — no benchmark data"/><span className="soon">soon</span></>}
+              </div>))}
+          </div>
+          <div className="chips">
+            {D.forks.map(f=>(
+              <button key={f.id} className={`chip ${filtered[f.id]?'on':''}`} onClick={()=>toggleFilter(f.id)}>
+                <span className="dot" style={{background:f.color,opacity:filtered[f.id]?1:.35}}/>{f.short}
+              </button>))}
+            <button className="chip disabled" disabled>
+              <span className="dot" style={{background:'var(--color-neutral-600)',opacity:.4}}/>HRX
+              <span className="pulse" title="Not tracked yet"/><span className="soon">soon</span>
+            </button>
+          </div>
+        </div>
+
+        <main>
+          {D.models.length===0
+            ?<p className="empty">No benchmark data yet. The first nightly run will populate this.</p>
+            :vis.length===0
+            ?<p className="empty">All backends are hidden — turn one back on above.</p>
+            :<>
+              <div className="thead" style={{gridTemplateColumns:gridCols}}>
+                <span/><span className="col-h">Model</span>
+                {vis.map(f=>(<span key={f.id} className="col-h r">
+                  <span className="dot" style={{background:f.color,marginRight:6,display:'inline-block',verticalAlign:1}}/>{f.short}
+                </span>))}
+              </div>
+              {D.models.map(m=>{
+                const scen=(D.perf[m.id]||{})[scenario]||{};
+                const tps=vis.map(f=>scen[f.id]?.tps_mean||0);
+                const max=Math.max(0,...tps);
+                const open=expanded.has(m.id);
+                return(
+                  <div key={m.id}>
+                    <div className="trow" style={{gridTemplateColumns:gridCols}}
+                      onClick={()=>toggleModel(m.id)} aria-expanded={open}>
+                      <span className="caret" style={{transform:open?'rotate(90deg)':'rotate(0deg)'}}>
+                        <svg width="10" height="10" viewBox="0 0 256 256" fill="currentColor"><path d="M181.66,122.34a8,8,0,0,1,0,11.32l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32Z"/></svg>
+                      </span>
+                      <span className="mname">{m.id}</span>
+                      {vis.map((f,i)=>(
+                        <span key={f.id} className={`cellv num ${max>0&&tps[i]>=max*.999&&tps[i]>0?'strong':''}`}>
+                          {tps[i]?tps[i].toFixed(1):'—'}</span>))}
+                    </div>
+                    {open&&<Detail D={D} model={m} scenario={scenario} forks={vis}/>}
+                  </div>);
+              })}
+            </>}
+        </main>
+
+        <footer>
+          Generated {gen}
+          {D.meta.run_url&&<> · <a href={D.meta.run_url} target="_blank">latest run #{D.meta.run_id}</a></>}
+          {commit&&<> · commit <span className="num">{commit}</span></>}
+          <br/>Click a model to see all backends and build history · click a chart point to open its CI run
+        </footer>
+      </div>
+    </div>
+  );
+}
+
+/* ----------------------- snapshot history (rewind) ----------------------- *
+ * Each nightly run commits leaderboard.json to the benchmark-data branch, so
+ * git holds every past snapshot. We list those commits via the GitHub API and
+ * fetch a chosen commit's leaderboard.json by raw URL to rewind the dashboard.
+ * ------------------------------------------------------------------------- */
+const HISTORY_BRANCH='benchmark-data';
+const LB_PATH='leaderboard.json';
+function repoSlug(meta){return meta&&meta.repo?meta.repo:'lemonade-sdk/lemonade';}
+function snapshotListUrl(meta){
+  return `https://api.github.com/repos/${repoSlug(meta)}/commits?sha=${HISTORY_BRANCH}&path=${LB_PATH}&per_page=30`;
+}
+function snapshotRawUrl(meta,sha){
+  return `https://raw.githubusercontent.com/${repoSlug(meta)}/${sha}/${LB_PATH}`;
+}
+
+function App(){
+  const [state,setState]=useState({status:'loading'});
+  const [snapshots,setSnapshots]=useState([]);   // [{sha,date,label}]
+  const [snapSha,setSnapSha]=useState('latest');  // 'latest' or a commit sha
+
+  // initial load: embedded data, else fetch DATA_URL
+  useEffect(()=>{
+    if(window.__LEADERBOARD__){
+      try{setState({status:'ok',D:indexData(window.__LEADERBOARD__)});}
+      catch(e){setState({status:'error',msg:String(e)});}
+      return;
+    }
+    fetch(DATA_URL,{cache:'no-store'})
+      .then(r=>{if(!r.ok)throw new Error(`HTTP ${r.status} fetching ${DATA_URL}`);return r.json()})
+      .then(lb=>setState({status:'ok',D:indexData(lb)}))
+      .catch(e=>setState({status:'error',msg:String(e)}));
+  },[]);
+
+  // once loaded, try to list past snapshots (best-effort; needs network)
+  useEffect(()=>{
+    if(state.status!=='ok')return;
+    fetch(snapshotListUrl(state.D.meta),{cache:'no-store'})
+      .then(r=>r.ok?r.json():[])
+      .then(commits=>{
+        if(!Array.isArray(commits)||!commits.length)return;
+        setSnapshots(commits.map(c=>{
+          const d=(c.commit?.committer?.date||'').slice(0,10);
+          return {sha:c.sha,date:d,label:`${d} · ${c.sha.slice(0,7)}`};
+        }));
+      })
+      .catch(()=>{});
+  },[state.status]);
+
+  const loadSnapshot=sha=>{
+    setSnapSha(sha);
+    if(sha==='latest'){
+      // reload the default source
+      if(window.__LEADERBOARD__){setState({status:'ok',D:indexData(window.__LEADERBOARD__)});return;}
+      setState({status:'loading'});
+      fetch(DATA_URL,{cache:'no-store'}).then(r=>r.json())
+        .then(lb=>setState({status:'ok',D:indexData(lb)}))
+        .catch(e=>setState({status:'error',msg:String(e)}));
+      return;
+    }
+    setState(s=>({...s,loadingSnap:true}));
+    fetch(snapshotRawUrl(state.D.meta,sha),{cache:'no-store'})
+      .then(r=>{if(!r.ok)throw new Error(`HTTP ${r.status}`);return r.json()})
+      .then(lb=>setState({status:'ok',D:indexData(lb)}))
+      .catch(e=>setState({status:'error',msg:'snapshot load failed: '+e}));
+  };
+
+  if(state.status==='loading')return <div className="page"><p className="loading">Loading benchmark data…</p></div>;
+  if(state.status==='error')return(
+    <div className="page">
+      <header className="hero"><h1>Backend regression dashboard</h1></header>
+      <div className="errbox">
+        Could not load <code>{DATA_URL}</code>.<br/>{state.msg}<br/><br/>
+        This dashboard reads the <code>leaderboard.json</code> produced by the benchmark
+        regression workflow. Serve it next to this file, embed it via gen_dashboard.py,
+        or pass <code>?data=&lt;url&gt;</code>.
+      </div>
+    </div>);
+  return <Dashboard D={state.D} snapshots={snapshots} snapSha={snapSha} onSnapshot={loadSnapshot}/>;
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
