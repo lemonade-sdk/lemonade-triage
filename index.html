@@ -241,6 +241,8 @@ function shortLabel(lbl,id){
 }
 const fmtTtft=v=>v==null?'—':(v<2000?`${Math.round(v)} ms`:`${(v/1000).toFixed(1)} s`);
 const fmtTps=v=>v==null?'—':v.toFixed(1);
+const prefillTps=d=>d?.input_tokens&&d?.ttft_ms_mean>0?d.input_tokens/(d.ttft_ms_mean/1000):null;
+const fmtPrefill=v=>v==null?'—':v.toFixed(1);
 
 function indexData(lb){
   const bms=lb.by_model_scenario||{};
@@ -289,8 +291,9 @@ function regsFor(D,modelId){
 
 /* ---------------------------- trend chart ---------------------------- */
 const HIST_METRICS=[
-  {key:'tps_mean',   label:'tok/s', unit:'tok/s', better:'up'},
-  {key:'ttft_ms_mean',label:'TTFT',  unit:'ms',    better:'down'},
+  {key:'tps_mean',      label:'tok/s',        unit:'tok/s', better:'up'},
+  {key:'prefill_tps',   label:'Prefill tok/s', unit:'tok/s', better:'up', computed:true},
+  {key:'ttft_ms_mean',  label:'TTFT',          unit:'ms',    better:'down'},
   {key:'vram_peak_gb',label:'VRAM',  unit:'GB',    better:'down'},
 ];
 function TrendChart({D,model,scenario,forks}){
@@ -299,9 +302,13 @@ function TrendChart({D,model,scenario,forks}){
   const metric=HIST_METRICS.find(m=>m.key===metricKey);
   const W=860,H=190,PL=48,PR=16,PT=14,PB=30,cw=W-PL-PR,ch=H-PT-PB;
   const hist=(D.history[model.id]||{})[scenario]||{};
-  // a metric is available only if at least one point has a non-null value
-  const metricHas=k=>forks.some(f=>(hist[f.id]||[]).some(p=>p[k]!=null));
-  const series=forks.map(f=>({f,data:(hist[f.id]||[]).filter(p=>p[metricKey]!=null)})).filter(s=>s.data.length);
+  // inject computed prefill_tps into each history point
+  const enriched={};
+  for(const [fid,pts] of Object.entries(hist)){
+    enriched[fid]=pts.map(p=>({...p,prefill_tps:prefillTps(p)}));
+  }
+  const metricHas=k=>forks.some(f=>(enriched[f.id]||[]).some(p=>p[k]!=null));
+  const series=forks.map(f=>({f,data:(enriched[f.id]||[]).filter(p=>p[metricKey]!=null)})).filter(s=>s.data.length);
   const tabs=(
     <div className="mtabs">
       {HIST_METRICS.map(m=>{
@@ -354,7 +361,7 @@ function TrendChart({D,model,scenario,forks}){
   const x=k=>PL+(runs.length<2?0.5:xi(k)/(runs.length-1))*cw;
   const y=v=>PT+ch-((v-mn)/((mx-mn)||1))*ch;
   const runLabel=k=>{const d=runDate[k]||'';return d?d.slice(5,10):String(k).slice(0,6);};
-  const fmtVal=v=>metricKey==='ttft_ms_mean'?fmtTtft(v):(metricKey==='vram_peak_gb'?v.toFixed(1)+' GB':v.toFixed(1));
+  const fmtVal=v=>metricKey==='ttft_ms_mean'?fmtTtft(v):(metricKey==='vram_peak_gb'?v.toFixed(1)+' GB':v.toFixed(1)+' tok/s');
   // regressions only meaningful for tok/s (up is better)
   const regs=metricKey==='tps_mean'?series.map(s=>({f:s.f,r:regInfo(collapse(s.data))})).filter(s=>s.r):[];
   return(
@@ -454,6 +461,7 @@ function ReproPanel({cmd}){
 /* -------------------------- expanded detail -------------------------- */
 function Detail({D,model,scenario,forks}){
   const [reproFor,setReproFor]=useState(null); // fork_id whose repro is open
+  const [showTtft,setShowTtft]=useState(false);
   const scen=(D.perf[model.id]||{})[scenario]||{};
   const vals=forks.map(f=>scen[f.id]).filter(Boolean);
   const maxTps=vals.length?Math.max(...vals.map(v=>v.tps_mean)):0;
@@ -464,7 +472,9 @@ function Detail({D,model,scenario,forks}){
     <div className="detail">
       <div className="drow head">
         <span>Backend</span><span>Build</span><span className="r">tok/s</span>
-        <span className="r">TTFT</span><span className="r c-vram">VRAM</span>
+        <span className="r" style={{cursor:'pointer',userSelect:'none'}} title="Click to toggle between Prefill tok/s and TTFT ms" onClick={()=>setShowTtft(v=>!v)}>
+          {showTtft?'TTFT':'Prefill tok/s'}<span style={{fontSize:10,marginLeft:4,opacity:.55}}>{showTtft?'↩':'⇄'}</span>
+        </span><span className="r c-vram">VRAM</span>
         <span className="r c-ctx">ctx</span>
         <span className="r c-q">MMLU</span><span className="r c-q">Perplexity</span>
         <span className="r">vs fastest</span><span className="r c-run">run</span>
@@ -476,7 +486,7 @@ function Detail({D,model,scenario,forks}){
           <div className="drow" key={f.id}>
             <span><span className="dot" style={{background:f.color,marginRight:7,verticalAlign:1}}/>{f.short}</span>
             <span className="muted num">{f.version||'—'}</span>
-            <span className="r muted">no data</span><span/><span className="c-vram"/><span className="c-ctx"/>
+            <span className="r muted">no data</span><span className="r"/><span className="c-vram"/><span className="c-ctx"/>
             <span className="c-q"/><span className="c-q"/><span/><span className="c-run"/><span className="c-repro"/>
           </div>);
         const fast=maxTps>0&&d.tps_mean>=maxTps*.999;
@@ -491,7 +501,7 @@ function Detail({D,model,scenario,forks}){
             </span>
             <span className="muted num">{d.fork_version||f.version||'—'}</span>
             <span className={`r num ${fast?'cellv strong':''}`}>{fmtTps(d.tps_mean)}</span>
-            <span className="r num">{fmtTtft(d.ttft_ms_mean)}</span>
+            <span className="r num">{showTtft?fmtTtft(d.ttft_ms_mean):fmtPrefill(prefillTps(d))}</span>
             <span className="r num c-vram">{d.vram_peak_gb==null?'—':d.vram_peak_gb.toFixed(1)+' GB'}</span>
             <span className="r num muted c-ctx">{d.ctx_size||'—'}</span>
             <span className="r num muted c-q" title="Quality eval not yet collected">{fmtQ(d.mmlu)}</span>
