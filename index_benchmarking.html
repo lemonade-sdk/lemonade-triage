@@ -6,28 +6,30 @@
 <title>Lemonade performance · Backend regression dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600&display=swap" rel="stylesheet">
 <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <style>
-/* ---- Nocturne design tokens (from the Claude Design system) ---- */
+/* ---- Lemonade website design tokens (light / yellow / green) ---- */
 :root{
-  --color-bg:#161826;
-  --color-surface:#232532;
-  --color-surface-2:#292b31;
-  --color-text:#e9e9ed;
-  --color-accent:#9184d9;
-  --color-accent-2:#a7a1db;
-  --color-divider:color-mix(in srgb, #e9e9ed 16%, transparent);
-  --color-neutral-600:#75798c;
-  --color-warn:#e0b25a;
-  --color-err:#e0625a;
+  --color-bg:#FAFAF5;
+  --color-surface:#FFFFFF;
+  --color-surface-2:#F3F3F3;
+  --color-text:#2D2F2F;
+  --color-accent:#3C6531;        /* brand green — readable label/link accent */
+  --color-accent-2:#4d7a40;
+  --color-highlight:#FCD846;     /* brand yellow — fills / highlights */
+  --color-divider:rgba(45,47,47,0.12);
+  --color-neutral-600:#6b6b6b;
+  --color-warn:#9a7d00;
+  --color-err:#c0392b;
   --radius-sm:4px;--radius-md:8px;--radius-lg:14px;
-  --shadow-sm:0 0 0 1px #3f424d;
-  --shadow-md:0 0 0 1px #595d6c,0 6px 18px rgba(0,0,0,0.55);
+  --shadow-sm:0 0 0 1px rgba(45,47,47,0.10);
+  --shadow-md:0 0 0 1px rgba(45,47,47,0.12),0 8px 32px rgba(45,47,47,0.08);
   --space-1:2.8px;--space-2:5.6px;--space-3:8.4px;--space-4:11.2px;--space-6:16.8px;--space-8:22.4px;
-  --font:'Inter',system-ui,-apple-system,sans-serif;
+  --font:'Manrope','Segoe UI',system-ui,-apple-system,sans-serif;
+  --font-display:'Plus Jakarta Sans','Segoe UI',sans-serif;
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html{background:var(--color-bg)}
@@ -43,7 +45,9 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--color-accent);outli
 /* ---- nav ---- */
 .nav{display:flex;align-items:center;gap:16px;border-bottom:1px solid var(--color-divider);
   padding:0 32px;height:56px}
-.nav-brand{font-size:15px;font-weight:600;letter-spacing:-.01em}
+.nav-brand{font-family:var(--font-display);font-size:15px;font-weight:700;letter-spacing:-.01em;
+  display:inline-flex;align-items:center;gap:9px}
+.nav-logo{height:24px;width:auto;display:block}
 .nav-spacer{margin-left:auto}
 .nav a.repo{font-size:13.5px;color:color-mix(in srgb, var(--color-text) 62%, transparent)}
 .btn{display:inline-flex;align-items:center;gap:7px;padding:8px 14px;font-size:13.5px;
@@ -71,7 +75,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--color-accent);outli
 .page{max-width:1180px;margin:0 auto;padding:40px 32px 80px}
 header.hero{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;
   flex-wrap:wrap;margin-bottom:28px}
-h1{font-size:26px;font-weight:600;letter-spacing:-.015em}
+h1{font-family:var(--font-display);font-size:26px;font-weight:700;letter-spacing:-.015em}
 .hero .sub{font-size:14px;color:color-mix(in srgb, var(--color-text) 55%, transparent);margin-top:5px}
 .tag{font-size:12.5px;padding:6px 12px;border-radius:var(--radius-md);white-space:nowrap}
 .tag-neutral{color:color-mix(in srgb, var(--color-text) 70%, transparent);background:var(--color-surface);
@@ -83,7 +87,7 @@ h1{font-size:26px;font-weight:600;letter-spacing:-.015em}
 .card{display:flex;flex-direction:column;gap:var(--space-2);padding:var(--space-6);
   border-radius:var(--radius-md);background:var(--color-surface);box-shadow:var(--shadow-sm)}
 .card-kicker{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--color-accent)}
-.card-title{font-size:22px;font-weight:600;letter-spacing:-.01em}
+.card-title{font-family:var(--font-display);font-size:22px;font-weight:700;letter-spacing:-.01em}
 .card-meta{font-size:12.5px;color:color-mix(in srgb, var(--color-text) 50%, transparent)}
 
 /* ---- toolbar ---- */
@@ -103,6 +107,20 @@ h1{font-size:26px;font-weight:600;letter-spacing:-.015em}
 .chip:hover:not(.disabled){color:var(--color-text);border-color:color-mix(in srgb, var(--color-text) 40%, transparent)}
 .chip.on{color:var(--color-text);border-color:color-mix(in srgb, var(--color-text) 40%, transparent);background:var(--color-surface)}
 .chip.disabled{opacity:.55;cursor:not-allowed}
+.chip.exp{border-style:dashed;border-color:color-mix(in srgb, var(--color-warn) 50%, transparent)}
+.chip.exp.on{background:color-mix(in srgb, var(--color-warn) 12%, transparent);border-color:color-mix(in srgb, var(--color-warn) 60%, transparent)}
+.exp-badge{font-size:9px;letter-spacing:.06em;text-transform:uppercase;font-weight:600;
+  color:var(--color-warn);border:1px solid color-mix(in srgb, var(--color-warn) 45%, transparent);
+  border-radius:var(--radius-sm);padding:1px 4px;margin-left:1px}
+.exp-toggle{display:inline-flex;align-items:center;gap:7px;margin-top:10px;font-size:12px;
+  color:color-mix(in srgb, var(--color-text) 62%, transparent)}
+.exp-toggle.on{color:var(--color-text)}
+.exp-switch{margin-left:auto;width:30px;height:17px;border-radius:999px;flex:none;position:relative;
+  background:color-mix(in srgb, var(--color-text) 20%, transparent);transition:background .15s}
+.exp-toggle.on .exp-switch{background:var(--color-warn)}
+.exp-knob{position:absolute;top:2px;left:2px;width:13px;height:13px;border-radius:50%;
+  background:var(--color-surface);transition:transform .15s;box-shadow:0 1px 2px rgba(0,0,0,.25)}
+.exp-toggle.on .exp-knob{transform:translateX(13px)}
 .soon{font-size:10px;letter-spacing:.04em;color:var(--color-err);margin-left:2px}
 @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(224,98,90,.55)}70%{box-shadow:0 0 0 6px rgba(224,98,90,0)}100%{box-shadow:0 0 0 0 rgba(224,98,90,0)}}
 .pulse{width:7px;height:7px;border-radius:50%;background:var(--color-err);display:inline-block;
@@ -116,6 +134,9 @@ h1{font-size:26px;font-weight:600;letter-spacing:-.015em}
 .col-h.r{text-align:right}
 .trow{padding:12px 8px;border-bottom:1px solid var(--color-divider);cursor:pointer}
 .trow:hover{background:color-mix(in srgb, var(--color-text) 4%, transparent)}
+.trow.exp-row{background:color-mix(in srgb, var(--color-warn) 9%, transparent);
+  box-shadow:inset 3px 0 0 var(--color-warn)}
+.trow.exp-row:hover{background:color-mix(in srgb, var(--color-warn) 14%, transparent)}
 .caret{display:inline-flex;color:color-mix(in srgb, var(--color-text) 45%, transparent);
   transition:transform .15s;flex:none}
 .mname{font-size:13.5px;font-weight:500}
@@ -221,6 +242,17 @@ const DEFAULT_DATA_URL=
   'https://raw.githubusercontent.com/lemonade-sdk/lemonade/benchmark-data/leaderboard.json';
 const DATA_URL=params.get('data')||DEFAULT_DATA_URL;
 
+/* Model aliases — collapse registry entries that are the SAME logical model but
+ * carry different names because each backend recipe needs its own registry entry
+ * (lemond enforces one recipe per model). Maps an alias name -> the canonical
+ * row it should merge into, so all backends compare side-by-side on one line.
+ * Add a pair here when a new experimental-recipe model shadows a llamacpp one.
+ * Note: the HRX entry uses Q4_K_M weights of Qwen3-30B-A3B-Instruct-2507. */
+const MODEL_ALIASES={
+  'Qwen3-30B-A3B-Instruct-2507-HRX':'Qwen3-30B-A3B-Instruct-2507-GGUF',
+};
+const canonModel=m=>MODEL_ALIASES[m]||m;
+
 /* Fork colors — oklch hues from the Nocturne design (mono-purple family). */
 const FORK_HUES={
   'llamacpp-upstream-vulkan':289,
@@ -228,6 +260,7 @@ const FORK_HUES={
   'llamacpp-rocm-nightly':60,
   'llamacpp-rocm-stable':200,
   'llamacpp-upstream-cuda':320,
+  'llamacpp-hrx':150,
   'vllm-nightly':90,
 };
 function colorFor(id){
@@ -244,29 +277,44 @@ const fmtTps=v=>v==null?'—':v.toFixed(1);
 
 function indexData(lb){
   const bms=lb.by_model_scenario||{};
+  const experimental=new Set(lb.experimental_forks||[]);
   const models=new Map(),scenarios=new Set(),forks=new Map();
   const perf={};
   for(const key of Object.keys(bms)){
     const list=bms[key];if(!list||!list.length)continue;
-    const [model,scenario]=key.split('|');
+    const [rawModel,scenario]=key.split('|');
+    const model=canonModel(rawModel);
     scenarios.add(scenario);
     if(!models.has(model))models.set(model,{id:model});
     for(const e of list){
       if(!forks.has(e.fork_id))forks.set(e.fork_id,{
         id:e.fork_id,label:e.fork_label||e.fork_id,
         short:shortLabel(e.fork_label,e.fork_id),
-        repo:e.fork_repo||'',version:e.fork_version||'',color:colorFor(e.fork_id)});
+        repo:e.fork_repo||'',version:e.fork_version||'',color:colorFor(e.fork_id),
+        experimental:experimental.has(e.fork_id)});
       else{const f=forks.get(e.fork_id);if(e.fork_version)f.version=e.fork_version;}
       perf[model]=perf[model]||{};
       perf[model][scenario]=perf[model][scenario]||{};
       perf[model][scenario][e.fork_id]=e;
     }
   }
+  // Remap history under canonical model names so aliased models (e.g. the HRX
+  // twin) chart on the same trend series as their llamacpp counterpart.
+  const rawHist=lb.history||{};
+  const history={};
+  for(const m of Object.keys(rawHist)){
+    const cm=canonModel(m);
+    const dst=history[cm]=history[cm]||{};
+    for(const scn of Object.keys(rawHist[m])){
+      const dscn=dst[scn]=dst[scn]||{};
+      Object.assign(dscn,rawHist[m][scn]);  // fork_id keys don't collide across aliases
+    }
+  }
   return {
     models:[...models.values()].sort((a,b)=>a.id.localeCompare(b.id)),
     scenarios:[...scenarios].sort(),
     forks:[...forks.values()],
-    perf, history:lb.history||{}, meta:lb,
+    perf, history, meta:lb,
   };
 }
 
@@ -277,16 +325,6 @@ function regInfo(series){
     return {at:b.version,pct:(b.tps_mean-a.tps_mean)/a.tps_mean*100};
   return null;
 }
-function regsFor(D,modelId){
-  const out=[];const hist=D.history[modelId]||{};
-  for(const scn of Object.keys(hist))
-    for(const fid of Object.keys(hist[scn])){
-      const r=regInfo(hist[scn][fid]);
-      if(r){const f=D.forks.find(x=>x.id===fid);out.push({scenario:scn,fork:f||{id:fid,short:fid},...r});}
-    }
-  return out;
-}
-
 /* ---------------------------- trend chart ---------------------------- */
 const HIST_METRICS=[
   {key:'tps_mean',   label:'tok/s', unit:'tok/s', better:'up'},
@@ -457,7 +495,11 @@ function Detail({D,model,scenario,forks}){
   const scen=(D.perf[model.id]||{})[scenario]||{};
   const vals=forks.map(f=>scen[f.id]).filter(Boolean);
   const maxTps=vals.length?Math.max(...vals.map(v=>v.tps_mean)):0;
-  const rows=[...forks].sort((a,b)=>(scen[b.id]?.tps_mean??-1)-(scen[a.id]?.tps_mean??-1));
+  // Experimental forks (e.g. HRX) are model-scoped — only surface them on models
+  // they actually benched. Drop the useless "no data" row on every other model.
+  const rows=[...forks]
+    .filter(f=>scen[f.id]||!f.experimental)
+    .sort((a,b)=>(scen[b.id]?.tps_mean??-1)-(scen[a.id]?.tps_mean??-1));
   const fmtQ=v=>v==null?'—':(typeof v==='number'?v.toFixed(2):v);
   const toggleRepro=id=>setReproFor(cur=>cur===id?null:id);
   return(
@@ -518,6 +560,13 @@ function Dashboard({D,snapshots,snapSha,onSnapshot}){
   const [scenario,setScenario]=useState(D.scenarios[0]||'chat-short');
   const [filtered,setFiltered]=useState(()=>Object.fromEntries(D.forks.map(f=>[f.id,true])));
   const [expanded,setExpanded]=useState(()=>new Set(D.models.length?[D.models[0].id]:[]));
+  // Focus mode: a fork whose row-set the table is scoped to. Set by clicking an
+  // experimental chip (e.g. HRX) — narrows the table to only that fork's models.
+  const [focusFork,setFocusFork]=useState(null);
+  // Master switch for experimental backends (HRX etc). Default ON. When OFF,
+  // experimental forks are fully removed — no chip, column, detail, or chart.
+  const [showExp,setShowExp]=useState(true);
+  const hasExp=D.forks.some(f=>f.experimental);
 
   // Hardware selector — grouped from the run hardware block(s). Only the
   // machines that actually reported results appear (no fabricated hardware).
@@ -528,10 +577,23 @@ function Dashboard({D,snapshots,snapSha,onSnapshot}){
   const [hwId,setHwId]=useState(hwOptions[0].id);
   const sys=(hwOptions.find(h=>h.id===hwId)||hwOptions[0]).sys;
 
-  const vis=D.forks.filter(f=>filtered[f.id]);
-  const allRegs=D.models.flatMap(m=>regsFor(D,m.id));
+  const vis=D.forks.filter(f=>filtered[f.id]&&(showExp||!f.experimental));
   const toggleModel=id=>setExpanded(e=>{const n=new Set(e);n.has(id)?n.delete(id):n.add(id);return n});
   const toggleFilter=id=>setFiltered(f=>({...f,[id]:!f[id]}));
+
+  // Models a fork supports = those it has actually benched. Experimental forks'
+  // supported rows get a tint + badge in the normal view.
+  const supportedBy=fid=>D.models.filter(
+    m=>Object.values(D.perf[m.id]||{}).some(sc=>sc[fid]));
+  const expSupported=new Set();
+  for(const f of vis)
+    if(f.experimental)for(const m of supportedBy(f.id))expSupported.add(m.id);
+
+  // Focus mode: scope the table to only the focused fork's models — makes clear
+  // that this (experimental) backend runs only these models, not the full set.
+  // Ignored if that fork is hidden (e.g. experimental master toggle off).
+  const focusValid=focusFork&&vis.some(f=>f.id===focusFork);
+  const shownModels=focusValid?supportedBy(focusFork):D.models;
 
   const gen=D.meta.generated_at?new Date(D.meta.generated_at).toISOString().replace('T',' ').slice(0,16)+' UTC':'—';
   const commit=(D.meta.commit||'').slice(0,7);
@@ -544,7 +606,12 @@ function Dashboard({D,snapshots,snapSha,onSnapshot}){
   return(
     <div style={{background:'var(--color-bg)',minHeight:'100vh'}}>
       <div className="nav">
-        <span className="nav-brand">Lemonade performance</span>
+        <span className="nav-brand">
+          <img className="nav-logo"
+            src="https://raw.githubusercontent.com/lemonade-sdk/assets/main/logo.png"
+            alt="Lemonade" onError={e=>{e.target.style.display='none'}}/>
+          Lemonade performance
+        </span>
         <select className="hw-select" value={hwId} onChange={e=>setHwId(e.target.value)} title="Benchmark hardware">
           {hwOptions.map(h=><option key={h.id} value={h.id}>{h.label}</option>)}
         </select>
@@ -567,16 +634,16 @@ function Dashboard({D,snapshots,snapSha,onSnapshot}){
             <h1>Backend regression dashboard</h1>
             <p className="sub">Nightly inference benchmarks across bring-your-own-backend forks</p>
           </div>
-          {allRegs.length
-            ?<span className="tag tag-outline">{allRegs.length} regression{allRegs.length>1?'s':''}</span>
-            :<span className="tag tag-neutral">All stable</span>}
+          {D.meta.lemonade_version&&
+            <span className="tag tag-neutral" title="Lemonade build under test for this snapshot">
+              Lemonade {D.meta.lemonade_version}</span>}
         </header>
 
         <div className="stats">
           <div className="card">
-            <span className="card-kicker">Health</span>
-            <span className="card-title">{allRegs.length?`${allRegs.length} regression${allRegs.length>1?'s':''}`:'All stable'}</span>
-            <span className="card-meta">across all tracked model × backend pairs</span>
+            <span className="card-kicker">Lemonade under test</span>
+            <span className="card-title">{D.meta.lemonade_version||'—'}</span>
+            <span className="card-meta">server + CLI build for this snapshot</span>
           </div>
           <div className="card">
             <span className="card-kicker">Models tracked</span>
@@ -585,8 +652,15 @@ function Dashboard({D,snapshots,snapSha,onSnapshot}){
           </div>
           <div className="card">
             <span className="card-kicker">Backends tracked</span>
-            <span className="card-title num">{D.forks.length}</span>
+            <span className="card-title num">{vis.length}</span>
             <span className="card-meta">forks currently reporting results</span>
+            {hasExp&&(
+              <button className={`exp-toggle ${showExp?'on':''}`} onClick={()=>setShowExp(v=>!v)}
+                title="Show or hide experimental backends (HRX, etc.)">
+                <span className="exp-badge">exp</span>
+                Experimental backends
+                <span className="exp-switch"><span className="exp-knob"/></span>
+              </button>)}
           </div>
         </div>
 
@@ -598,7 +672,7 @@ function Dashboard({D,snapshots,snapSha,onSnapshot}){
           </div>
           <div className="sysgrp">
             <span className="sys-k">Lemonade</span>
-            <span className="sys-v">{sys.lemonade_version||sys.lemond_version||'—'}</span>
+            <span className="sys-v">{sys.lemonade_version||sys.lemond_version||D.meta.lemonade_version||'—'}</span>
             <span className="sys-m">{sys.lemond_version?`lemond ${sys.lemond_version}`:'server + CLI build'}</span>
           </div>
           <div className="sysgrp">
@@ -623,14 +697,21 @@ function Dashboard({D,snapshots,snapSha,onSnapshot}){
               </div>))}
           </div>
           <div className="chips">
-            {D.forks.map(f=>(
-              <button key={f.id} className={`chip ${filtered[f.id]?'on':''}`} onClick={()=>toggleFilter(f.id)}>
-                <span className="dot" style={{background:f.color,opacity:filtered[f.id]?1:.35}}/>{f.short}
-              </button>))}
-            <button className="chip disabled" disabled>
-              <span className="dot" style={{background:'var(--color-neutral-600)',opacity:.4}}/>HRX
-              <span className="pulse" title="Not tracked yet"/><span className="soon">soon</span>
-            </button>
+            {D.forks.filter(f=>showExp||!f.experimental).map(f=>{
+              // Experimental chips act as a focus toggle (scope the table to just
+              // their models); production chips are plain column on/off filters.
+              const isFocus=focusFork===f.id;
+              const onClick=f.experimental
+                ? ()=>{setFocusFork(isFocus?null:f.id); if(!isFocus)setFiltered(v=>({...v,[f.id]:true}));}
+                : ()=>toggleFilter(f.id);
+              const active=f.experimental?isFocus:filtered[f.id];
+              return(
+              <button key={f.id} className={`chip ${active?'on':''} ${f.experimental?'exp':''}`} onClick={onClick}
+                title={f.experimental?'Focus: show only this backend’s models':''}>
+                <span className="dot" style={{background:f.color,opacity:active?1:.35}}/>{f.short}
+                {f.experimental&&<span className="exp-badge">{isFocus?'focus':'exp'}</span>}
+              </button>);
+            })}
           </div>
         </div>
 
@@ -639,6 +720,8 @@ function Dashboard({D,snapshots,snapSha,onSnapshot}){
             ?<p className="empty">No benchmark data yet. The first nightly run will populate this.</p>
             :vis.length===0
             ?<p className="empty">All backends are hidden — turn one back on above.</p>
+            :shownModels.length===0
+            ?<p className="empty">No benchmark data yet for the selected backend.</p>
             :<>
               <div className="thead" style={{gridTemplateColumns:gridCols}}>
                 <span/><span className="col-h">Model</span>
@@ -646,22 +729,22 @@ function Dashboard({D,snapshots,snapSha,onSnapshot}){
                   <span className="dot" style={{background:f.color,marginRight:6,display:'inline-block',verticalAlign:1}}/>{f.short}
                 </span>))}
               </div>
-              {D.models.map(m=>{
+              {shownModels.map(m=>{
                 const scen=(D.perf[m.id]||{})[scenario]||{};
                 const tps=vis.map(f=>scen[f.id]?.tps_mean||0);
                 const max=Math.max(0,...tps);
                 const open=expanded.has(m.id);
                 return(
                   <div key={m.id}>
-                    <div className="trow" style={{gridTemplateColumns:gridCols}}
+                    <div className={`trow ${expSupported.has(m.id)?'exp-row':''}`} style={{gridTemplateColumns:gridCols}}
                       onClick={()=>toggleModel(m.id)} aria-expanded={open}>
                       <span className="caret" style={{transform:open?'rotate(90deg)':'rotate(0deg)'}}>
                         <svg width="10" height="10" viewBox="0 0 256 256" fill="currentColor"><path d="M181.66,122.34a8,8,0,0,1,0,11.32l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32Z"/></svg>
                       </span>
-                      <span className="mname">{m.id}</span>
+                      <span className="mname">{m.id}{expSupported.has(m.id)&&<span className="exp-badge" style={{marginLeft:7}}>hrx</span>}</span>
                       {vis.map((f,i)=>(
                         <span key={f.id} className={`cellv num ${max>0&&tps[i]>=max*.999&&tps[i]>0?'strong':''}`}>
-                          {tps[i]?tps[i].toFixed(1):'—'}</span>))}
+                          {tps[i]?tps[i].toFixed(1):(f.experimental?'':'—')}</span>))}
                     </div>
                     {open&&<Detail D={D} model={m} scenario={scenario} forks={vis}/>}
                   </div>);
