@@ -146,7 +146,7 @@ h1{font-family:var(--font-display);font-size:26px;font-weight:700;letter-spacing
 /* ---- expanded detail ---- */
 .detail{padding:16px 20px 24px 34px;margin:2px 0 10px;background:var(--color-surface);
   border-radius:var(--radius-md);box-shadow:var(--shadow-sm)}
-.drow{display:grid;grid-template-columns:1.4fr .85fr .55fr .55fr .55fr .38fr .5fr .65fr .65fr .32fr .4fr;gap:8px;
+.drow{display:grid;grid-template-columns:1.4fr .85fr .5fr .55fr .55fr .55fr .55fr .38fr .5fr .65fr .65fr .32fr .4fr;gap:8px;
   padding:var(--space-2);align-items:center;border-bottom:1px solid var(--color-divider)}
 .drow.head span{font-size:11px;letter-spacing:.08em;text-transform:uppercase;
   color:color-mix(in srgb, var(--color-text) 60%, transparent)}
@@ -212,7 +212,7 @@ footer a{color:color-mix(in srgb, var(--color-text) 70%, transparent)}
   .page{padding:28px 18px 56px}
   .stats{grid-template-columns:1fr}
   .sysbar{grid-template-columns:1fr}
-  .drow{grid-template-columns:1.4fr .7fr .6fr .6fr .5fr}
+  .drow{grid-template-columns:1.4fr .7fr .6fr .6fr .6fr .5fr}
   .drow .c-vram,.drow .c-ctx,.drow .c-run,.drow .c-q,.drow .c-repro{display:none}
 }
 </style>
@@ -231,11 +231,13 @@ const {useState,useEffect}=React;
  *  2. FETCH (local dev): pull the CI-published leaderboard.json from the
  *     benchmark-data branch. Override with ?data=<url>.
  * Schema: { generated_at, run_id, run_url, repo, repo_url, actions_url, commit,
+ *   meta: { lemonade_version, lemonade_versions_seen:[...], systems:[
+ *     {id,cpu,gpu,gpu_full,vram_gb,ram_gb,os,lemonade_version} ] },
  *   by_model_scenario: { "model|scenario": [ {fork_id, fork_label, fork_repo,
- *     fork_version, backend, ctx_size, tps_mean, ttft_ms_mean, vram_peak_gb,
- *     run_url, ...} ] },
- *   history: { model: { scenario: { fork_id: [ {version,timestamp,tps_mean,
- *     ttft_ms_mean,run_url} ] } } } }
+ *     fork_version, backend, ctx_size, tg_tps, pp_tps, ttft_ms_best, quant,
+ *     lemonade_version, hw_id, vram_peak_gb, run_url, ...} ] },
+ *   history: { model: { scenario: { fork_id: [ {version,timestamp,tg_tps,
+ *     pp_tps,ttft_ms_best,quant,lemonade_version,run_url} ] } } } }
  * ------------------------------------------------------------------ */
 const params=new URLSearchParams(location.search);
 const DEFAULT_DATA_URL=
@@ -252,6 +254,29 @@ const MODEL_ALIASES={
   'Qwen3-30B-A3B-Instruct-2507-HRX':'Qwen3-30B-A3B-Instruct-2507-GGUF',
 };
 const canonModel=m=>MODEL_ALIASES[m]||m;
+
+/* Fallback quantization per model, derived from the server_models.json registry
+ * checkpoint filenames (e.g. Qwen3.5-4B-GGUF -> Qwen3.5-4B-UD-Q4_K_XL.gguf).
+ * Used only when a leaderboard entry lacks its own `quant` field (older runs
+ * that predate quant capture). Fresh runs carry per-entry quant and win. */
+const MODEL_QUANT={
+  'Gemma-4-12B-it-GGUF':'Q4_K_M','Gemma-4-26B-A4B-it-GGUF':'Q4_K_M',
+  'Gemma-4-31B-it-GGUF':'Q4_K_M','Meta-Llama-3.1-8B-Instruct-HRX':'Q4_K_M',
+  'MiniCPM-V-4.6-GGUF':'Q4_K_M','MiniCPM5-1B-GGUF':'Q4_K_M',
+  'NVIDIA-Nemotron-3.5-Lightning-30B-A3B-GGUF':'Q4_K_XL','Qwen3-14B-GGUF':'Q4_0',
+  'Qwen3-30B-A3B-Instruct-2507-GGUF':'Q4_0','Qwen3-30B-A3B-Instruct-2507-HRX':'Q4_K_M',
+  'Qwen3-4B-GGUF':'Q4_0','Qwen3-8B-GGUF':'Q4_1',
+  'Qwen3-Coder-30B-A3B-Instruct-GGUF':'Q4_K_M','Qwen3.5-35B-A3B-GGUF':'Q4_K_XL',
+  'Qwen3.5-4B-GGUF':'Q4_K_XL','Qwen3.5-9B-GGUF':'Q4_K_XL',
+  'Qwen3.6-27B-MTP-GGUF':'Q4_K_XL','Qwen3.6-35B-A3B-GGUF':'Q4_K_XL',
+  'Qwen3.8-27B-GGUF':'Q4_K_XL',
+};
+const quantFor=(d,modelName)=>d.quant||MODEL_QUANT[modelName]||MODEL_QUANT[canonModel(modelName)]||null;
+
+/* Display-name overrides keyed by fork_id. "Strix Halo" is a hardware codename,
+ * not a backend name — the halo-box fork is the ROCm build, so show it as
+ * "halo-box-rocm". Dashboard-only; the fork_id/registry are unchanged. */
+const FORK_DISPLAY={'halo-box-strix':'halo-box-rocm'};
 
 /* Fork colors — oklch hues from the Nocturne design (mono-purple family). */
 const FORK_HUES={
@@ -288,8 +313,8 @@ function indexData(lb){
     if(!models.has(model))models.set(model,{id:model});
     for(const e of list){
       if(!forks.has(e.fork_id))forks.set(e.fork_id,{
-        id:e.fork_id,label:e.fork_label||e.fork_id,
-        short:shortLabel(e.fork_label,e.fork_id),
+        id:e.fork_id,label:FORK_DISPLAY[e.fork_id]||e.fork_label||e.fork_id,
+        short:FORK_DISPLAY[e.fork_id]||shortLabel(e.fork_label,e.fork_id),
         repo:e.fork_repo||'',version:e.fork_version||'',color:colorFor(e.fork_id),
         experimental:experimental.has(e.fork_id)});
       else{const f=forks.get(e.fork_id);if(e.fork_version)f.version=e.fork_version;}
@@ -321,19 +346,20 @@ function indexData(lb){
 function regInfo(series){
   if(!series||series.length<2)return null;
   const a=series[series.length-2],b=series[series.length-1];
-  if(a.tps_mean>0 && b.tps_mean<a.tps_mean*0.97)
-    return {at:b.version,pct:(b.tps_mean-a.tps_mean)/a.tps_mean*100};
+  if(a.tg_tps>0 && b.tg_tps<a.tg_tps*0.97)
+    return {at:b.version,pct:(b.tg_tps-a.tg_tps)/a.tg_tps*100};
   return null;
 }
 /* ---------------------------- trend chart ---------------------------- */
 const HIST_METRICS=[
-  {key:'tps_mean',   label:'tok/s', unit:'tok/s', better:'up'},
-  {key:'ttft_ms_mean',label:'TTFT',  unit:'ms',    better:'down'},
-  {key:'vram_peak_gb',label:'VRAM',  unit:'GB',    better:'down'},
+  {key:'tg_tps',      label:'TG tok/s', unit:'tok/s', better:'up'},
+  {key:'pp_tps',      label:'PP tok/s', unit:'tok/s', better:'up'},
+  {key:'ttft_ms_best',label:'TTFT',     unit:'ms',    better:'down'},
+  {key:'vram_peak_gb',label:'VRAM',     unit:'GB',    better:'down'},
 ];
 function TrendChart({D,model,scenario,forks}){
   const [tip,setTip]=useState(null);
-  const [metricKey,setMetricKey]=useState('tps_mean');
+  const [metricKey,setMetricKey]=useState('tg_tps');
   const metric=HIST_METRICS.find(m=>m.key===metricKey);
   const W=860,H=190,PL=48,PR=16,PT=14,PB=30,cw=W-PL-PR,ch=H-PT-PB;
   const hist=(D.history[model.id]||{})[scenario]||{};
@@ -392,9 +418,9 @@ function TrendChart({D,model,scenario,forks}){
   const x=k=>PL+(runs.length<2?0.5:xi(k)/(runs.length-1))*cw;
   const y=v=>PT+ch-((v-mn)/((mx-mn)||1))*ch;
   const runLabel=k=>{const d=runDate[k]||'';return d?d.slice(5,10):String(k).slice(0,6);};
-  const fmtVal=v=>metricKey==='ttft_ms_mean'?fmtTtft(v):(metricKey==='vram_peak_gb'?v.toFixed(1)+' GB':v.toFixed(1));
+  const fmtVal=v=>metricKey==='ttft_ms_best'?fmtTtft(v):(metricKey==='vram_peak_gb'?v.toFixed(1)+' GB':v.toFixed(1));
   // regressions only meaningful for tok/s (up is better)
-  const regs=metricKey==='tps_mean'?series.map(s=>({f:s.f,r:regInfo(collapse(s.data))})).filter(s=>s.r):[];
+  const regs=metricKey==='tg_tps'?series.map(s=>({f:s.f,r:regInfo(collapse(s.data))})).filter(s=>s.r):[];
   return(
     <div className="chart">
       {tabs}
@@ -494,20 +520,21 @@ function Detail({D,model,scenario,forks}){
   const [reproFor,setReproFor]=useState(null); // fork_id whose repro is open
   const scen=(D.perf[model.id]||{})[scenario]||{};
   const vals=forks.map(f=>scen[f.id]).filter(Boolean);
-  const maxTps=vals.length?Math.max(...vals.map(v=>v.tps_mean)):0;
+  const maxTps=vals.length?Math.max(...vals.map(v=>v.tg_tps)):0;
   // Experimental forks (e.g. HRX) are model-scoped — only surface them on models
   // they actually benched. Drop the useless "no data" row on every other model.
   const rows=[...forks]
     .filter(f=>scen[f.id]||!f.experimental)
-    .sort((a,b)=>(scen[b.id]?.tps_mean??-1)-(scen[a.id]?.tps_mean??-1));
+    .sort((a,b)=>(scen[b.id]?.tg_tps??-1)-(scen[a.id]?.tg_tps??-1));
   const fmtQ=v=>v==null?'—':(typeof v==='number'?v.toFixed(2):v);
   const toggleRepro=id=>setReproFor(cur=>cur===id?null:id);
   return(
     <div className="detail">
       <div className="drow head">
-        <span>Backend</span><span>Build</span><span className="r">tok/s</span>
+        <span>Backend</span><span>Build</span><span className="r c-q">Quant</span>
+        <span className="r">TG tok/s</span><span className="r">PP tok/s</span>
         <span className="r">TTFT</span><span className="r c-vram">VRAM</span>
-        <span className="r c-ctx">ctx</span>
+        <span className="r c-ctx" title="Input prompt tokens actually prefilled for this scenario (PP = input ÷ TTFT)">input</span>
         <span className="r c-q">MMLU</span><span className="r c-q">Perplexity</span>
         <span className="r">vs fastest</span><span className="r c-run">run</span>
         <span className="r c-repro">repro</span>
@@ -518,11 +545,12 @@ function Detail({D,model,scenario,forks}){
           <div className="drow" key={f.id}>
             <span><span className="dot" style={{background:f.color,marginRight:7,verticalAlign:1}}/>{f.short}</span>
             <span className="muted num">{f.version||'—'}</span>
-            <span className="r muted">no data</span><span/><span className="c-vram"/><span className="c-ctx"/>
+            <span className="r num muted c-q">—</span>
+            <span className="r muted">no data</span><span/><span/><span className="c-vram"/><span className="c-ctx"/>
             <span className="c-q"/><span className="c-q"/><span/><span className="c-run"/><span className="c-repro"/>
           </div>);
-        const fast=maxTps>0&&d.tps_mean>=maxTps*.999;
-        const gap=maxTps>0?(d.tps_mean-maxTps)/maxTps*100:0;
+        const fast=maxTps>0&&d.tg_tps>=maxTps*.999;
+        const gap=maxTps>0?(d.tg_tps-maxTps)/maxTps*100:0;
         const open=reproFor===f.id;
         return(
           <React.Fragment key={f.id}>
@@ -531,11 +559,15 @@ function Detail({D,model,scenario,forks}){
               <span className="dot" style={{background:f.color,marginRight:7,verticalAlign:1}}/>{f.short}
               {f.repo&&<a className="brepo" href={`https://github.com/${f.repo}`} target="_blank">{f.repo}</a>}
             </span>
-            <span className="muted num">{d.fork_version||f.version||'—'}</span>
-            <span className={`r num ${fast?'cellv strong':''}`}>{fmtTps(d.tps_mean)}</span>
-            <span className="r num">{fmtTtft(d.ttft_ms_mean)}</span>
+            <span className="muted num">{d.fork_version||f.version||'—'}
+              {d.lemonade_version&&<span className="muted" style={{fontSize:11,marginLeft:6}}>lem {d.lemonade_version}</span>}
+            </span>
+            <span className="r num muted c-q">{quantFor(d,model.id)||'—'}</span>
+            <span className={`r num ${fast?'cellv strong':''}`}>{fmtTps(d.tg_tps)}</span>
+            <span className="r num">{d.pp_tps==null?'—':fmtTps(d.pp_tps)}</span>
+            <span className="r num">{fmtTtft(d.ttft_ms_best)}</span>
             <span className="r num c-vram">{d.vram_peak_gb==null?'—':d.vram_peak_gb.toFixed(1)+' GB'}</span>
-            <span className="r num muted c-ctx">{d.ctx_size||'—'}</span>
+            <span className="r num muted c-ctx" title={d.ctx_size?`loaded at ctx ${d.ctx_size}`:''}>{d.input_tokens!=null?d.input_tokens.toLocaleString():'—'}</span>
             <span className="r num muted c-q" title="Quality eval not yet collected">{fmtQ(d.mmlu)}</span>
             <span className="r num muted c-q" title="Quality eval not yet collected">{fmtQ(d.perplexity??d.ppl)}</span>
             <span className={`r num ${fast?'cellv strong':'muted'}`}>{fast?'fastest':gap.toFixed(1)+'%'}</span>
@@ -573,7 +605,7 @@ function Dashboard({D,snapshots,snapSha,onSnapshot}){
   const systems=D.meta.systems||(D.meta.system?[D.meta.system]:[]);
   const hwOptions=systems.length
     ? systems.map((s,i)=>({id:s.id||`hw${i}`,label:s.hwLabel||s.gpu||`Hardware ${i+1}`,sys:s}))
-    : [{id:'default',label:'Strix Halo · gfx1151',sys:{}}];
+    : [{id:'default',label:'AMD Ryzen AI Max · gfx1151',sys:{}}];
   const [hwId,setHwId]=useState(hwOptions[0].id);
   const sys=(hwOptions.find(h=>h.id===hwId)||hwOptions[0]).sys;
 
@@ -599,9 +631,8 @@ function Dashboard({D,snapshots,snapSha,onSnapshot}){
   const commit=(D.meta.commit||'').slice(0,7);
   const gridCols=`26px 1.4fr repeat(${Math.max(vis.length,1)}, minmax(90px,1fr))`;
 
-  // scenario segmented control: real scenarios + a disabled "long-context soon"
-  const segItems=[...D.scenarios.map(s=>({id:s,disabled:false})),
-                  {id:'long-context',disabled:true}];
+  // scenario segmented control: real scenarios (incl. context-4k / context-32k)
+  const segItems=D.scenarios.map(s=>({id:s,disabled:false}));
 
   return(
     <div style={{background:'var(--color-bg)',minHeight:'100vh'}}>
@@ -672,8 +703,14 @@ function Dashboard({D,snapshots,snapSha,onSnapshot}){
           </div>
           <div className="sysgrp">
             <span className="sys-k">Lemonade</span>
-            <span className="sys-v">{sys.lemonade_version||sys.lemond_version||D.meta.lemonade_version||'—'}</span>
-            <span className="sys-m">{sys.lemond_version?`lemond ${sys.lemond_version}`:'server + CLI build'}</span>
+            <span className="sys-v">
+              {sys.lemonade_version||sys.lemond_version||D.meta.lemonade_version||'—'}
+              {(D.meta.lemonade_versions_seen||[]).length>1&&
+                <span className="muted" style={{fontSize:11.5,marginLeft:6}}
+                  title={`Releases across history: ${(D.meta.lemonade_versions_seen||[]).join(', ')}`}>
+                  (+{(D.meta.lemonade_versions_seen||[]).length-1} more)</span>}
+            </span>
+            <span className="sys-m">{sys.lemond_version?`lemond ${sys.lemond_version}`:'latest release · server + CLI build'}</span>
           </div>
           <div className="sysgrp">
             <span className="sys-k">Default llama.cpp backend</span>
@@ -690,10 +727,9 @@ function Dashboard({D,snapshots,snapSha,onSnapshot}){
           <div className="seg">
             {segItems.map(s=>(
               <div key={s.id}
-                className={`seg-opt ${s.id===scenario?'on':''} ${s.disabled?'disabled':''}`}
-                onClick={()=>!s.disabled&&setScenario(s.id)}>
+                className={`seg-opt ${s.id===scenario?'on':''}`}
+                onClick={()=>setScenario(s.id)}>
                 {s.id}
-                {s.disabled&&<><span className="pulse" title="Not ready yet — no benchmark data"/><span className="soon">soon</span></>}
               </div>))}
           </div>
           <div className="chips">
@@ -731,7 +767,7 @@ function Dashboard({D,snapshots,snapSha,onSnapshot}){
               </div>
               {shownModels.map(m=>{
                 const scen=(D.perf[m.id]||{})[scenario]||{};
-                const tps=vis.map(f=>scen[f.id]?.tps_mean||0);
+                const tps=vis.map(f=>scen[f.id]?.tg_tps||0);
                 const max=Math.max(0,...tps);
                 const open=expanded.has(m.id);
                 return(
