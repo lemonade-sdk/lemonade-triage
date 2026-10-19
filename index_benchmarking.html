@@ -623,10 +623,12 @@ function Dashboard({D,snapshots,snapSha,onSnapshot}){
   // supported rows get a tint + badge in the normal view.
   const supportedBy=fid=>D.models.filter(
     m=>Object.values(D.perf[m.id]||{}).some(sc=>sc[fid]));
+  // Badge a model only if the experimental fork has data for the SELECTED scenario.
   const expForModel={};
   for(const f of vis)
-    if(f.experimental)for(const m of supportedBy(f.id))
-      expForModel[m.id]=[...(expForModel[m.id]||[]),f.short];
+    if(f.experimental)for(const m of D.models)
+      if((D.perf[m.id]||{})[scenario]?.[f.id])
+        expForModel[m.id]=[...(expForModel[m.id]||[]),f.short];
 
   // Focus mode: scope the table to only the focused fork's models — makes clear
   // that this (experimental) backend runs only these models, not the full set.
