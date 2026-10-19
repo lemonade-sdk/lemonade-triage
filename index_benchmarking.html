@@ -565,9 +565,7 @@ function Detail({D,model,scenario,forks}){
               <span className="dot" style={{background:f.color,marginRight:7,verticalAlign:1}}/>{f.short}
               {f.repo&&<a className="brepo" href={`https://github.com/${f.repo}`} target="_blank">{f.repo}</a>}
             </span>
-            <span className="muted num">{d.fork_version||f.version||'—'}
-              {d.lemonade_version&&<span className="muted" style={{fontSize:11,marginLeft:6}}>lem {d.lemonade_version}</span>}
-            </span>
+            <span className="muted num">{d.fork_version||f.version||'—'}</span>
             <span className="r num muted c-q">{quantFor(d,model.id)||'—'}</span>
             <span className={`r num ${fast?'cellv strong':''}`}>{fmtTps(tg)}</span>
             <span className="r num">{d.pp_tps==null?'—':fmtTps(d.pp_tps)}</span>
