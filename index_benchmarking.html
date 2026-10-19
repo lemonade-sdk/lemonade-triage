@@ -620,15 +620,8 @@ function Dashboard({D,snapshots,snapSha,onSnapshot}){
   const toggleFilter=id=>setFiltered(f=>({...f,[id]:!f[id]}));
 
   // Models a fork supports = those it has actually benched. Experimental forks'
-  // supported rows get a tint + badge in the normal view.
   const supportedBy=fid=>D.models.filter(
     m=>Object.values(D.perf[m.id]||{}).some(sc=>sc[fid]));
-  // Badge a model only if the experimental fork has data for the SELECTED scenario.
-  const expForModel={};
-  for(const f of vis)
-    if(f.experimental)for(const m of D.models)
-      if((D.perf[m.id]||{})[scenario]?.[f.id])
-        expForModel[m.id]=[...(expForModel[m.id]||[]),f.short];
 
   // Focus mode: scope the table to only the focused fork's models — makes clear
   // that this (experimental) backend runs only these models, not the full set.
@@ -781,12 +774,12 @@ function Dashboard({D,snapshots,snapSha,onSnapshot}){
                 const open=expanded.has(m.id);
                 return(
                   <div key={m.id}>
-                    <div className={`trow ${expForModel[m.id]?'exp-row':''}`} style={{gridTemplateColumns:gridCols}}
+                    <div className="trow" style={{gridTemplateColumns:gridCols}}
                       onClick={()=>toggleModel(m.id)} aria-expanded={open}>
                       <span className="caret" style={{transform:open?'rotate(90deg)':'rotate(0deg)'}}>
                         <svg width="10" height="10" viewBox="0 0 256 256" fill="currentColor"><path d="M181.66,122.34a8,8,0,0,1,0,11.32l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32Z"/></svg>
                       </span>
-                      <span className="mname">{m.id}{expForModel[m.id]&&<span className="exp-badge" style={{marginLeft:7}}>{expForModel[m.id].join(', ')}</span>}</span>
+                      <span className="mname">{m.id}</span>
                       {vis.map((f,i)=>(
                         <span key={f.id} className={`cellv num ${max>0&&tps[i]>=max*.999&&tps[i]>0?'strong':''}`}>
                           {tps[i]?tps[i].toFixed(1):(f.experimental?'':'—')}</span>))}
