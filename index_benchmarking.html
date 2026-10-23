@@ -146,7 +146,7 @@ h1{font-family:var(--font-display);font-size:26px;font-weight:700;letter-spacing
 /* ---- expanded detail ---- */
 .detail{padding:16px 20px 24px 34px;margin:2px 0 10px;background:var(--color-surface);
   border-radius:var(--radius-md);box-shadow:var(--shadow-sm)}
-.drow{display:grid;grid-template-columns:1.4fr .85fr .5fr .55fr .55fr .55fr .55fr .38fr .5fr .65fr .65fr .32fr .4fr;gap:8px;
+.drow{display:grid;grid-template-columns:1.4fr .85fr .5fr .55fr .55fr .55fr .55fr .38fr .65fr .65fr .32fr .4fr;gap:8px;
   padding:var(--space-2);align-items:center;border-bottom:1px solid var(--color-divider)}
 .drow.head span{font-size:11px;letter-spacing:.08em;text-transform:uppercase;
   color:color-mix(in srgb, var(--color-text) 60%, transparent)}
@@ -531,7 +531,13 @@ function Detail({D,model,scenario,forks}){
   const rows=[...forks]
     .filter(f=>scen[f.id]||!f.experimental)
     .sort((a,b)=>(tgOf(scen[b.id])??-1)-(tgOf(scen[a.id])??-1));
-  const fmtQ=v=>v==null?'—':(typeof v==='number'?v.toFixed(2):v);
+  const accCell=d=>{
+    if(d.accuracy_passed==null)return <span className="r num muted c-q" title="Accuracy not collected for this run">—</span>;
+    const ok=d.accuracy_pass, ref=d.accuracy_ref;
+    const tip=ref==null?'No reference backend result for this model':`Reference (Vulkan): ${Math.round(ref*(d.accuracy_total||0))}/${d.accuracy_total}`;
+    return <span className="r num c-q" title={tip} style={{color:ok===false?'var(--color-err)':ok?'var(--color-accent)':undefined}}>
+      {d.accuracy_passed}/{d.accuracy_total}{ok===false?' ✗':ok?' ✓':''}</span>;
+  };
   const toggleRepro=id=>setReproFor(cur=>cur===id?null:id);
   return(
     <div className="detail">
@@ -540,7 +546,7 @@ function Detail({D,model,scenario,forks}){
         <span className="r">TG tok/s</span><span className="r">PP tok/s</span>
         <span className="r">TTFT</span><span className="r c-vram">VRAM</span>
         <span className="r c-ctx" title="Input prompt tokens actually prefilled for this scenario (PP = input ÷ TTFT)">input</span>
-        <span className="r c-q">MMLU</span><span className="r c-q">Perplexity</span>
+        <span className="r c-q" title="Answer-key accuracy; ✓/✗ = within 3 questions of the Vulkan reference">Accuracy</span>
         <span className="r">vs fastest</span><span className="r c-run">run</span>
         <span className="r c-repro">repro</span>
       </div>
@@ -572,8 +578,7 @@ function Detail({D,model,scenario,forks}){
             <span className="r num">{fmtTtft(ttftOf(d))}</span>
             <span className="r num c-vram">{d.vram_peak_gb==null?'—':d.vram_peak_gb.toFixed(1)+' GB'}</span>
             <span className="r num muted c-ctx" title={d.ctx_size?`loaded at ctx ${d.ctx_size}`:''}>{d.input_tokens!=null?d.input_tokens.toLocaleString():'—'}</span>
-            <span className="r num muted c-q" title="Quality eval not yet collected">{fmtQ(d.mmlu)}</span>
-            <span className="r num muted c-q" title="Quality eval not yet collected">{fmtQ(d.perplexity??d.ppl)}</span>
+            {accCell(d)}
             <span className={`r num ${fast?'cellv strong':'muted'}`}>{fast?'fastest':gap.toFixed(1)+'%'}</span>
             <span className="r num c-run">{d.run_url?<a href={d.run_url} target="_blank">↗</a>:'—'}</span>
             <span className="r c-repro">
