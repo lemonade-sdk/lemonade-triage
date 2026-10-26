@@ -537,32 +537,33 @@ function AccuracyPanel({D,model,fid,refLabel}){
   const refId=D.meta.accuracy_reference;
   const mine=det[fid]||{}, ref=det[refId]||{};
   if(!mine.failed)return <div className="acc-panel"><div className="acc-sum muted">Per-question detail isn't available for this run.</div></div>;
-  const isRef=fid===refId, mf=mine.failed, rf=isRef?{}:(ref.failed||{});
+  const isRef=fid===refId, noRef=!isRef&&!ref.failed, mf=mine.failed, rf=isRef||noRef?{}:ref.failed;
   const onlyHere=k=>(k in mf)&&!(k in rf);
   const ids=[...new Set([...Object.keys(mf),...Object.keys(rf)])]
     .sort((a,b)=>(onlyHere(b)-onlyHere(a))||a.localeCompare(b));
   const nOnly=Object.keys(mf).filter(onlyHere).length, nFixed=Object.keys(rf).filter(k=>!(k in mf)).length;
-  const cols=isRef?'2fr .8fr 2fr':'1.6fr .7fr 1.6fr 1.6fr';
+  const cols=isRef||noRef?'2fr .8fr 2fr':'1.6fr .7fr 1.6fr 1.6fr';
   const resp=r=>{const t=(r||'').trim();return t.length>180?'…'+t.slice(-180):t||'(empty reply)';};
   return(
     <div className="acc-panel">
       <div className="acc-sum">
         Missed <strong>{Object.keys(mf).length}</strong> of {mine.total}
         {isRef?<span className="muted"> · this is the reference backend</span>
+          :noRef?<span className="muted"> · no {refLabel} result for this model yet, so no comparison</span>
           :<span className="muted"> · <span className={nOnly?'acc-bad':''}>{nOnly} only on this backend</span> · {nFixed} missed by {refLabel} but right here</span>}
       </div>
       {ids.length===0?<div className="muted">No questions missed.</div>:<>
         <div className="acc-row head" style={{gridTemplateColumns:cols}}>
-          <span>Question</span><span>Expected</span><span>This backend</span>{!isRef&&<span>{refLabel}</span>}
+          <span>Question</span><span>Expected</span><span>This backend</span>{!isRef&&!noRef&&<span>{refLabel}</span>}
         </div>
         {ids.map(id=>{
           const q=qs[id]||{}, mBad=id in mf, rBad=id in rf;
           return(
-            <div key={id} className={`acc-row ${onlyHere(id)&&!isRef?'only':''}`} style={{gridTemplateColumns:cols}}>
+            <div key={id} className={`acc-row ${onlyHere(id)&&!isRef&&!noRef?'only':''}`} style={{gridTemplateColumns:cols}}>
               <span className="acc-q" title={id}>{q.prompt||id}</span>
               <span className="num">{q.expected||'—'}</span>
               <span className={mBad?'acc-bad':'acc-ok'}>{mBad?<span className="acc-resp">✗ {resp(mf[id])}</span>:'✓'}</span>
-              {!isRef&&<span className={rBad?'acc-bad':'acc-ok'}>{rBad?<span className="acc-resp">✗ {resp(rf[id])}</span>:'✓'}</span>}
+              {!isRef&&!noRef&&<span className={rBad?'acc-bad':'acc-ok'}>{rBad?<span className="acc-resp">✗ {resp(rf[id])}</span>:'✓'}</span>}
             </div>);
         })}
       </>}
