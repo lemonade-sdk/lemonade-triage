@@ -548,6 +548,13 @@ function AccuracyPanel({D,model,fid}){
           ?<span className="muted"> · not enough backends with results to compare</span>
           :<span className="muted"> · <span className={dev.size?'acc-bad':''}>{dev.size} that most other backends answered correctly</span></span>}
       </div>
+      {mine.health&&<div className="acc-sum muted">
+        Repeat check: {mine.health.nondeterministic.length
+          ?<span className="acc-bad">{mine.health.nondeterministic.length} repeated question(s) gave a different reply</span>
+          :'identical replies'}
+        {mine.health.cut_off>0&&<> · {mine.health.cut_off} reply(s) cut off at the token limit</>}
+        {mine.health.empty_replies>0&&<> · <span className="acc-bad">{mine.health.empty_replies} empty reply(s)</span></>}
+      </div>}
       {ids.length===0?<div className="muted">No questions missed.</div>:<>
         <div className="acc-row head" style={{gridTemplateColumns:cols}}><span>Question</span><span>Expected</span><span>Actual</span></div>
         {ids.map(id=>{
