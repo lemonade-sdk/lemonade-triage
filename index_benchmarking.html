@@ -535,8 +535,8 @@ function AccuracyPanel({D,model,fid}){
   const mine=((D.meta.accuracy_detail||{})[model.id]||{})[fid]||{};
   const qs=D.meta.accuracy_questions||{};
   if(!mine.failed)return <div className="acc-panel"><div className="acc-sum muted">Per-question detail isn't available for this run.</div></div>;
-  const failed=mine.failed, dev=new Set(mine.deviations||[]);
-  const ids=Object.keys(failed).sort((a,b)=>(dev.has(b)-dev.has(a))||a.localeCompare(b));
+  const failed=mine.failed;
+  const ids=Object.keys(failed).sort();
   const reply=v=>{const r=typeof v==='string'?v:(v||{}).response;const t=(r||'').trim();return t.length>220?'…'+t.slice(-220):t||'(empty reply)';};
   const cut=v=>typeof v==='object'&&v&&v.cut_off;
   const cols='2fr .8fr 2fr';
@@ -544,9 +544,7 @@ function AccuracyPanel({D,model,fid}){
     <div className="acc-panel">
       <div className="acc-sum">
         Missed <strong>{ids.length}</strong> of {mine.total}
-        {mine.deviations==null
-          ?<span className="muted"> · not enough backends with results to compare</span>
-          :<span className="muted"> · <span className={dev.size?'acc-bad':''}>{dev.size} that most other backends answered correctly</span></span>}
+        {mine.errors>0&&<span className="acc-bad"> · {mine.errors} question(s) not asked (request errors)</span>}
       </div>
       {mine.health&&<div className="acc-sum muted">
         Repeat check: {mine.health.nondeterministic.length
@@ -560,8 +558,7 @@ function AccuracyPanel({D,model,fid}){
         {ids.map(id=>{
           const q=qs[id]||{};
           return(
-            <div key={id} className={`acc-row ${dev.has(id)?'only':''}`} style={{gridTemplateColumns:cols}}
-              title={dev.has(id)?'Most other backends answered this correctly':''}>
+            <div key={id} className="acc-row" style={{gridTemplateColumns:cols}}>
               <span className="acc-q">{q.prompt||id}</span>
               <span className="num">{q.expected||'—'}</span>
               <span className="acc-bad acc-resp">{reply(failed[id])}{cut(failed[id])&&<span className="muted"> (cut off at token limit)</span>}</span>
@@ -583,11 +580,11 @@ function Detail({D,model,scenario,forks}){
     .sort((a,b)=>(tgOf(scen[b.id])??-1)-(tgOf(scen[a.id])??-1));
   const accCell=(d,fid)=>{
     if(d.accuracy_passed==null)return <span className="r num muted c-q" title="Accuracy not collected for this run">—</span>;
-    const ok=d.accuracy_pass, dv=d.accuracy_deviations;
-    const tip=(dv==null?'Not enough backends with results to compare':`${dv} question(s) missed that most other backends answered correctly`)+' · click for per-question detail';
-    return <span className="r num c-q" style={{color:ok===false?'var(--color-err)':ok?'var(--color-accent)':undefined}}>
-      <button className="acc-btn" title={tip} onClick={()=>setAccFor(cur=>cur===fid?null:fid)}>
-        {d.accuracy_passed}/{d.accuracy_total}{ok===false?' ✗':ok?' ✓':''}</button></span>;
+    const err=d.accuracy_errors>0?` · ${d.accuracy_errors} not asked (request errors)`:'';
+    return <span className="r num c-q">
+      <button className="acc-btn" title={`Questions answered correctly${err} · click for per-question detail`}
+        onClick={()=>setAccFor(cur=>cur===fid?null:fid)}>
+        {d.accuracy_passed}/{d.accuracy_total}{d.accuracy_errors>0&&<span className="acc-bad"> !</span>}</button></span>;
   };
   const toggleRepro=id=>setReproFor(cur=>cur===id?null:id);
   return(
@@ -597,7 +594,7 @@ function Detail({D,model,scenario,forks}){
         <span className="r">TG tok/s</span><span className="r">PP tok/s</span>
         <span className="r">TTFT</span><span className="r c-vram">VRAM</span>
         <span className="r c-ctx" title="Input prompt tokens actually prefilled for this scenario (PP = input ÷ TTFT)">input</span>
-        <span className="r c-q" title="Answer-key score. ✗ = more than 2 questions missed that most other backends answered correctly">Accuracy</span>
+        <span className="r c-q" title="Questions answered correctly out of those asked; click a score for the questions missed">Accuracy</span>
         <span className="r">vs fastest</span><span className="r c-run">run</span>
         <span className="r c-repro">repro</span>
       </div>
