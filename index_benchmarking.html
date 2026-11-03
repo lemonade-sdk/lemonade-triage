@@ -146,7 +146,7 @@ h1{font-family:var(--font-display);font-size:26px;font-weight:700;letter-spacing
 /* ---- expanded detail ---- */
 .detail{padding:16px 20px 24px 34px;margin:2px 0 10px;background:var(--color-surface);
   border-radius:var(--radius-md);box-shadow:var(--shadow-sm)}
-.drow{display:grid;grid-template-columns:1.4fr .85fr .5fr .55fr .55fr .55fr .55fr .38fr .5fr .65fr .65fr .32fr .4fr;gap:8px;
+.drow{display:grid;grid-template-columns:1.4fr .85fr .5fr .55fr .55fr .55fr .55fr .38fr .65fr .65fr .32fr .4fr;gap:8px;
   padding:var(--space-2);align-items:center;border-bottom:1px solid var(--color-divider)}
 .drow.head span{font-size:11px;letter-spacing:.08em;text-transform:uppercase;
   color:color-mix(in srgb, var(--color-text) 60%, transparent)}
@@ -162,6 +162,15 @@ h1{font-family:var(--font-display);font-size:26px;font-weight:700;letter-spacing
 .repro-btn:hover{color:var(--color-text);border-color:color-mix(in srgb, var(--color-text) 40%, transparent)}
 .repro-btn.on{color:var(--color-accent);border-color:var(--color-accent)}
 .repro-inline{border-bottom:1px solid var(--color-divider);padding:0 0 12px}
+.acc-btn{background:none;border:0;padding:0;font:inherit;color:inherit;cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}
+.acc-panel{border-bottom:1px solid var(--color-divider);padding:4px 0 14px;font-size:12.5px}
+.acc-sum{margin:4px 0 8px}
+.acc-row{display:grid;gap:12px;padding:7px 6px;border-top:1px solid var(--color-divider);align-items:start}
+.acc-row.head{font-size:11px;text-transform:uppercase;letter-spacing:.06em;opacity:.6;border-top:0}
+.acc-row.only{background:color-mix(in srgb, var(--color-err) 9%, transparent)}
+.acc-q{white-space:pre-wrap}
+.acc-resp{font-family:ui-monospace,monospace;font-size:11.5px;white-space:pre-wrap;word-break:break-word}
+.acc-ok{color:var(--color-accent)}.acc-bad{color:var(--color-err)}
 .repro-body{position:relative;margin:4px 0 0}
 .repro-body pre{background:var(--color-bg);border:1px solid var(--color-divider);
   border-radius:var(--radius-md);padding:14px 16px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
@@ -522,16 +531,61 @@ function ReproPanel({cmd}){
   );
 }
 
+function AccuracyPanel({D,model,fid}){
+  const mine=((D.meta.accuracy_detail||{})[model.id]||{})[fid]||{};
+  const qs=D.meta.accuracy_questions||{};
+  if(!mine.failed)return <div className="acc-panel"><div className="acc-sum muted">Per-question detail isn't available for this run.</div></div>;
+  const failed=mine.failed;
+  const ids=Object.keys(failed).sort();
+  const reply=v=>{const r=typeof v==='string'?v:(v||{}).response;const t=(r||'').trim();return t.length>220?'…'+t.slice(-220):t||'(empty reply)';};
+  const cut=v=>typeof v==='object'&&v&&v.cut_off;
+  const cols='2fr .8fr 2fr';
+  return(
+    <div className="acc-panel">
+      <div className="acc-sum">
+        Missed <strong>{ids.length}</strong> of {mine.total}
+        {mine.errors>0&&<span className="acc-bad"> · {mine.errors} question(s) not asked (request errors)</span>}
+      </div>
+      {mine.health&&<div className="acc-sum muted">
+        Repeat check: {mine.health.nondeterministic.length
+          ?<span className="acc-bad">{mine.health.nondeterministic.length} repeated question(s) gave a different reply</span>
+          :'identical replies'}
+        {mine.health.cut_off>0&&<> · {mine.health.cut_off} reply(s) cut off at the token limit</>}
+        {mine.health.empty_replies>0&&<> · <span className="acc-bad">{mine.health.empty_replies} empty reply(s)</span></>}
+      </div>}
+      {ids.length===0?<div className="muted">No questions missed.</div>:<>
+        <div className="acc-row head" style={{gridTemplateColumns:cols}}><span>Question</span><span>Expected</span><span>Actual</span></div>
+        {ids.map(id=>{
+          const q=qs[id]||{};
+          return(
+            <div key={id} className="acc-row" style={{gridTemplateColumns:cols}}>
+              <span className="acc-q">{q.prompt||id}</span>
+              <span className="num">{q.expected||'—'}</span>
+              <span className="acc-bad acc-resp">{reply(failed[id])}{cut(failed[id])&&<span className="muted"> (cut off at token limit)</span>}</span>
+            </div>);
+        })}
+      </>}
+    </div>);
+}
+
 /* -------------------------- expanded detail -------------------------- */
 function Detail({D,model,scenario,forks}){
   const [reproFor,setReproFor]=useState(null); // fork_id whose repro is open
+  const [accFor,setAccFor]=useState(null); // fork_id whose accuracy detail is open
   const scen=(D.perf[model.id]||{})[scenario]||{};
   const vals=forks.map(f=>scen[f.id]).filter(Boolean);
   const maxTps=vals.length?Math.max(...vals.map(v=>tgOf(v)??0)):0;
   const rows=[...forks]
     .filter(f=>scen[f.id]||!f.experimental)
     .sort((a,b)=>(tgOf(scen[b.id])??-1)-(tgOf(scen[a.id])??-1));
-  const fmtQ=v=>v==null?'—':(typeof v==='number'?v.toFixed(2):v);
+  const accCell=(d,fid)=>{
+    if(d.accuracy_passed==null)return <span className="r num muted c-q" title="Accuracy not collected for this run">—</span>;
+    const err=d.accuracy_errors>0?` · ${d.accuracy_errors} not asked (request errors)`:'';
+    return <span className="r num c-q">
+      <button className="acc-btn" title={`Questions answered correctly${err} · click for per-question detail`}
+        onClick={()=>setAccFor(cur=>cur===fid?null:fid)}>
+        {d.accuracy_passed}/{d.accuracy_total}{d.accuracy_errors>0&&<span className="acc-bad"> !</span>}</button></span>;
+  };
   const toggleRepro=id=>setReproFor(cur=>cur===id?null:id);
   return(
     <div className="detail">
@@ -540,7 +594,7 @@ function Detail({D,model,scenario,forks}){
         <span className="r">TG tok/s</span><span className="r">PP tok/s</span>
         <span className="r">TTFT</span><span className="r c-vram">VRAM</span>
         <span className="r c-ctx" title="Input prompt tokens actually prefilled for this scenario (PP = input ÷ TTFT)">input</span>
-        <span className="r c-q">MMLU</span><span className="r c-q">Perplexity</span>
+        <span className="r c-q" title="Questions answered correctly out of those asked; click a score for the questions missed">Accuracy</span>
         <span className="r">vs fastest</span><span className="r c-run">run</span>
         <span className="r c-repro">repro</span>
       </div>
@@ -552,15 +606,15 @@ function Detail({D,model,scenario,forks}){
             <span className="muted num">{f.version||'—'}</span>
             <span className="r num muted c-q">—</span>
             <span className="r muted">no data</span><span/><span/><span className="c-vram"/><span className="c-ctx"/>
-            <span className="c-q"/><span className="c-q"/><span/><span className="c-run"/><span className="c-repro"/>
+            <span className="c-q"/><span/><span className="c-run"/><span className="c-repro"/>
           </div>);
         const tg=tgOf(d);
         const fast=maxTps>0&&tg>=maxTps*.999;
         const gap=maxTps>0?(tg-maxTps)/maxTps*100:0;
-        const open=reproFor===f.id;
+        const open=reproFor===f.id, accOpen=accFor===f.id;
         return(
           <React.Fragment key={f.id}>
-          <div className={`drow ${open?'repro-open':''}`}>
+          <div className={`drow ${open||accOpen?'repro-open':''}`}>
             <span>
               <span className="dot" style={{background:f.color,marginRight:7,verticalAlign:1}}/>{f.short}
               {f.repo&&<a className="brepo" href={`https://github.com/${f.repo}`} target="_blank">{f.repo}</a>}
@@ -572,8 +626,7 @@ function Detail({D,model,scenario,forks}){
             <span className="r num">{fmtTtft(ttftOf(d))}</span>
             <span className="r num c-vram">{d.vram_peak_gb==null?'—':d.vram_peak_gb.toFixed(1)+' GB'}</span>
             <span className="r num muted c-ctx" title={d.ctx_size?`loaded at ctx ${d.ctx_size}`:''}>{d.input_tokens!=null?d.input_tokens.toLocaleString():'—'}</span>
-            <span className="r num muted c-q" title="Quality eval not yet collected">{fmtQ(d.mmlu)}</span>
-            <span className="r num muted c-q" title="Quality eval not yet collected">{fmtQ(d.perplexity??d.ppl)}</span>
+            {accCell(d,f.id)}
             <span className={`r num ${fast?'cellv strong':'muted'}`}>{fast?'fastest':gap.toFixed(1)+'%'}</span>
             <span className="r num c-run">{d.run_url?<a href={d.run_url} target="_blank">↗</a>:'—'}</span>
             <span className="r c-repro">
@@ -582,6 +635,7 @@ function Detail({D,model,scenario,forks}){
             </span>
           </div>
           {open&&<ReproPanel cmd={reproCommands(D,model,f,d,scenario)}/>}
+          {accOpen&&<AccuracyPanel D={D} model={model} fid={f.id}/>}
           </React.Fragment>);
       })}
 
