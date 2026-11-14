@@ -1,0 +1,249 @@
+{
+  "2187": [
+    {
+      "login": "SlawomirNowaczyk",
+      "score": 0.123,
+      "why": "history on 8/12 files \u00b7 load 3"
+    }
+  ],
+  "2438": [
+    {
+      "login": "superm1",
+      "score": 0.204,
+      "why": "history on 4/6 files \u00b7 Platform Core lead \u00b7 load 1"
+    },
+    {
+      "login": "bitgamma",
+      "score": 0.138,
+      "why": "history on 5/6 files \u00b7 CODEOWNER of 2/6 files \u00b7 load 12"
+    }
+  ],
+  "2892": [
+    {
+      "login": "superm1",
+      "score": 0.162,
+      "why": "history on 1/2 files \u00b7 load 2"
+    }
+  ],
+  "3440": [
+    {
+      "login": "superm1",
+      "score": 0.164,
+      "why": "history on 3/5 files \u00b7 Platform Core lead \u00b7 load 3"
+    }
+  ],
+  "3441": [
+    {
+      "login": "jeremyfowers",
+      "score": 0.055,
+      "why": "history on 10/10 files \u00b7 load 51"
+    }
+  ],
+  "3566": [
+    {
+      "login": "bitgamma",
+      "score": 0.076,
+      "why": "history on 4/7 files \u00b7 load 13"
+    }
+  ],
+  "3575": [
+    {
+      "login": "fl0rianr",
+      "score": 0.131,
+      "why": "history on 3/3 files \u00b7 load 3"
+    }
+  ],
+  "3576": [
+    {
+      "login": "superm1",
+      "score": 0.17,
+      "why": "history on 3/4 files \u00b7 Platform Core lead \u00b7 load 4"
+    },
+    {
+      "login": "meghsat",
+      "score": 0.113,
+      "why": "history on 4/4 files \u00b7 load 5"
+    }
+  ],
+  "3624": [
+    {
+      "login": "superm1",
+      "score": 0.177,
+      "why": "history on 4/7 files \u00b7 Platform Core lead \u00b7 load 5"
+    },
+    {
+      "login": "fl0rianr",
+      "score": 0.168,
+      "why": "history on 7/7 files \u00b7 load 4"
+    }
+  ],
+  "3673": [
+    {
+      "login": "fl0rianr",
+      "score": 0.151,
+      "why": "history on 4/5 files \u00b7 load 5"
+    },
+    {
+      "login": "superm1",
+      "score": 0.131,
+      "why": "history on 1/5 files \u00b7 Platform Core lead \u00b7 load 6"
+    }
+  ],
+  "3780": [
+    {
+      "login": "superm1",
+      "score": 0.129,
+      "why": "history on 2/3 files \u00b7 Platform Core lead \u00b7 load 7"
+    },
+    {
+      "login": "bitgamma",
+      "score": 0.086,
+      "why": "history on 3/3 files \u00b7 load 14"
+    }
+  ],
+  "3781": [
+    {
+      "login": "superm1",
+      "score": 0.119,
+      "why": "history on 2/5 files \u00b7 Platform Core lead \u00b7 load 8"
+    },
+    {
+      "login": "bitgamma",
+      "score": 0.111,
+      "why": "history on 5/5 files \u00b7 load 15"
+    }
+  ],
+  "3782": [
+    {
+      "login": "superm1",
+      "score": 0.379,
+      "why": "history on 3/4 files \u00b7 Platform Core lead \u00b7 load 9"
+    }
+  ],
+  "3783": [
+    {
+      "login": "superm1",
+      "score": 0.109,
+      "why": "history on 4/6 files \u00b7 Platform Core lead \u00b7 load 10"
+    }
+  ],
+  "3822": [
+    {
+      "login": "superm1",
+      "score": 0.226,
+      "why": "history on 2/2 files \u00b7 Platform Core lead \u00b7 load 11"
+    }
+  ],
+  "3838": [
+    {
+      "login": "superm1",
+      "score": 0.099,
+      "why": "history on 4/4 files \u00b7 Platform Core lead \u00b7 load 12"
+    },
+    {
+      "login": "bitgamma",
+      "score": 0.077,
+      "why": "history on 4/4 files \u00b7 load 16"
+    }
+  ],
+  "3894": [
+    {
+      "login": "abn",
+      "score": 0.184,
+      "why": "history on 2/2 files \u00b7 load 6"
+    },
+    {
+      "login": "jeremyfowers",
+      "score": 0.132,
+      "why": "history on 2/2 files \u00b7 Platform Core lead \u00b7 load 52"
+    }
+  ],
+  "3953": [
+    {
+      "login": "kenvandine",
+      "score": 0.158,
+      "why": "history on 46/50 files \u00b7 Cross-Vendor Support lead \u00b7 load 3"
+    }
+  ],
+  "3983": [
+    {
+      "login": "superm1",
+      "score": 0.096,
+      "why": "history on 3/4 files \u00b7 Platform Core lead \u00b7 load 13"
+    },
+    {
+      "login": "bitgamma",
+      "score": 0.075,
+      "why": "history on 3/4 files \u00b7 load 17"
+    }
+  ],
+  "4085": [
+    {
+      "login": "jeremyfowers",
+      "score": 0.082,
+      "why": "history on 2/2 files \u00b7 Enterprise Grade lead \u00b7 load 53"
+    }
+  ],
+  "4089": [
+    {
+      "login": "jeremyfowers",
+      "score": 0.126,
+      "why": "history on 5/5 files \u00b7 Platform Core lead \u00b7 load 54"
+    },
+    {
+      "login": "superm1",
+      "score": 0.102,
+      "why": "history on 2/5 files \u00b7 Platform Core lead \u00b7 load 14"
+    }
+  ],
+  "4100": [
+    {
+      "login": "meghsat",
+      "score": 0.135,
+      "why": "history on 3/3 files \u00b7 load 6"
+    }
+  ],
+  "4101": [
+    {
+      "login": "meghsat",
+      "score": 0.126,
+      "why": "history on 8/8 files \u00b7 load 7"
+    },
+    {
+      "login": "Geramy",
+      "score": 0.108,
+      "why": "history on 8/8 files \u00b7 Remote Use lead \u00b7 load 9"
+    }
+  ],
+  "4107": [
+    {
+      "login": "superm1",
+      "score": 0.127,
+      "why": "history on 1/1 files \u00b7 Platform Core lead \u00b7 load 15"
+    }
+  ],
+  "4136": [
+    {
+      "login": "meghsat",
+      "score": 0.094,
+      "why": "history on 2/3 files \u00b7 load 8"
+    },
+    {
+      "login": "jeremyfowers",
+      "score": 0.094,
+      "why": "history on 3/3 files \u00b7 Platform Core lead \u00b7 load 55"
+    }
+  ],
+  "4166": [
+    {
+      "login": "superm1",
+      "score": 0.11,
+      "why": "history on 1/1 files \u00b7 Platform Core lead \u00b7 load 16"
+    },
+    {
+      "login": "meghsat",
+      "score": 0.085,
+      "why": "history on 1/1 files \u00b7 load 9"
+    }
+  ]
+}

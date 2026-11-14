@@ -1,0 +1,994 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lemonade PR triage — lemonade-sdk/lemonade</title>
+<style>
+  :root {
+    --bg:#0d1117; --panel:#161b22; --panel-2:#21262d; --border:#30363d;
+    --fg:#e6edf3; --muted:#7d8590; --link:#58a6ff;
+    --stale:#ffa657; --first:#56d364; --draft:#484f58;
+    --hot:#b60205; --tier-lead:#ffd700; --tier-active:#79c0ff;
+  }
+  * { box-sizing:border-box; }
+  body { font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+         margin:0; background:var(--bg); color:var(--fg); }
+  a { color:var(--link); text-decoration:none; }
+  a:hover { text-decoration:underline; }
+
+  /* header */
+  header { padding:14px 24px; border-bottom:1px solid var(--border);
+           display:flex; justify-content:space-between; align-items:center;
+           gap:16px; flex-wrap:wrap; }
+  header h1 { margin:0; font-size:17px; font-weight:600; }
+  .header-right { display:flex; align-items:center; gap:20px; flex-wrap:wrap; }
+  .total-badge { font-size:28px; font-weight:700; color:var(--fg); line-height:1; }
+  .total-label { font-size:11px; color:var(--muted); text-transform:uppercase;
+                 letter-spacing:0.5px; margin-top:2px; }
+  .header-link { font-size:13px; color:var(--muted); }
+  .header-link:hover { color:var(--fg); }
+  .gen-time { font-size:12px; color:var(--muted); }
+
+  /* filter bar */
+  .page-band { padding:14px 24px; border-bottom:1px solid var(--border); }
+  div#filter-bar {
+                background:var(--panel); display:flex; gap:16px;
+                flex-wrap:wrap; align-items:flex-end; }
+  .filter-group { display:flex; flex-direction:column; gap:5px; }
+  .filter-group label { font-size:11px; font-weight:600; text-transform:uppercase;
+                        letter-spacing:0.5px; color:var(--muted); }
+  select { background:var(--bg); color:var(--fg); border:1px solid var(--border);
+           border-radius:6px; padding:5px 10px; font:inherit; font-size:13px;
+           cursor:pointer; min-width:180px; }
+  select:focus { outline:1px solid var(--link); }
+  .toggle-row { display:flex; gap:8px; }
+  .toggle { padding:5px 12px; border:1px solid var(--border); border-radius:6px;
+            background:var(--bg); color:var(--muted); cursor:pointer;
+            font:inherit; font-size:13px; white-space:nowrap; }
+  .toggle.on { border-color:var(--link); color:var(--fg); background:var(--panel-2); }
+  .toggle:hover { border-color:var(--link); color:var(--fg); }
+  button#clear-btn { padding:5px 12px; border:1px solid var(--border); border-radius:6px;
+               background:none; color:var(--muted); cursor:pointer;
+               font:inherit; font-size:13px; align-self:flex-end; }
+  button#clear-btn:hover { color:var(--fg); border-color:var(--fg); }
+
+  /* result bar */
+  .flex-row { display:flex; align-items:center; flex-wrap:wrap; }
+  /* activity chart */
+  div#activity-chart { background:var(--panel); }
+  .chart-header { display:flex; align-items:center; gap:16px; flex-wrap:wrap; margin-bottom:14px; }
+  .chart-header h2 { font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; color:var(--muted); margin:0; }
+  .legend-item { display:inline-flex; align-items:center; gap:5px; font-size:12px; color:var(--muted); }
+  .legend-dot { width:10px; height:10px; border-radius:2px; flex-shrink:0; }
+  .window-ctrl { display:flex; align-items:center; gap:8px; margin-left:auto; font-size:12px; color:var(--muted); }
+  .window-ctrl input[type=range] { accent-color:var(--link); width:100px; cursor:pointer; }
+  .window-ctrl strong { color:var(--fg); min-width:40px; display:inline-block; }
+  .chart-area { position:relative; }
+  .chart-wrap { display:flex; gap:2px; align-items:flex-end; height:140px; padding-bottom:24px; }
+  .chart-bar-group { display:flex; flex-direction:column; align-items:center; flex:1; position:relative; cursor:pointer; }
+  .chart-bar-group:hover .chart-tooltip { display:block; }
+  .chart-segments { display:flex; flex-direction:column-reverse; width:100%; gap:1px; border-radius:3px 3px 0 0; overflow:hidden; }
+  .bar-seg { width:100%; min-height:2px; }
+  .bar-opened { background:#58a6ff; }
+  .bar-merged  { background:#56d364; }
+  .bar-closed  { background:#f85149; }
+  .chart-date { font-size:9px; color:var(--muted); position:absolute; bottom:-20px; left:50%; transform:translateX(-50%) rotate(-35deg); transform-origin:top center; white-space:nowrap; }
+  .chart-baseline { position:absolute; bottom:24px; left:0; right:0; height:1px; background:var(--border); }
+  .chart-tooltip { display:none; position:absolute; bottom:calc(100% + 4px); left:50%; transform:translateX(-50%); background:#1c2128; border:1px solid var(--border); border-radius:6px; padding:8px 12px; font-size:11.5px; white-space:nowrap; z-index:20; pointer-events:none; box-shadow:0 4px 12px #0006; }
+  .chart-tooltip div { color:var(--fg); line-height:1.8; }
+  .chart-stats { display:flex; gap:24px; margin-top:10px; flex-wrap:wrap; }
+  .stat-box { font-size:12px; }
+  .stat-box .num { font-size:20px; font-weight:700; line-height:1; }
+  .stat-box .lbl { color:var(--muted); margin-top:2px; }
+  .chart-row { display:grid; grid-template-columns:1fr 1fr; gap:16px; padding:16px 24px 20px; border-bottom:1px solid var(--border); background:var(--panel); }
+  .mini-chart { background:var(--panel-2); border:1px solid var(--border); border-radius:8px; padding:14px 16px; }
+  .mini-chart h3 { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; color:var(--muted); margin:0 0 12px; }
+  /* WG breakdown bars */
+  .wg-bar-row { display:flex; align-items:center; gap:8px; margin-bottom:8px; font-size:12px; }
+  .wg-bar-label { width:140px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--muted); text-align:right; flex-shrink:0; }
+  .wg-bar-track { flex:1; background:var(--bg); border-radius:3px; height:12px; position:relative; }
+  .wg-bar-fill { height:100%; border-radius:3px; display:flex; align-items:center; }
+  .wg-bar-open   { background:#58a6ff88; }
+  .wg-bar-unclaim { background:var(--border); }
+  .wg-bar-count { position:absolute; right:-28px; top:0; font-size:11px; color:var(--muted); line-height:12px; }
+  /* Cumulative open line */
+  div#cumulative-chart { width:100%; overflow:hidden; }
+
+  div#result-bar { gap:16px; font-size:13px; }
+  span#result-count { font-weight:600; }
+  .result-breakdown { color:var(--muted); font-size:12px; }
+  .chip { display:inline-block; padding:1px 8px; border-radius:10px;
+          font-size:11px; font-weight:600; margin:0 2px; }
+  .chip.wg     { background:#1f3a5f; border:1px solid #79c0ff; color:#79c0ff; }
+  .chip.wg.predicted { background:transparent; border-style:dashed; }
+  .suggest { color:#56d364; }
+  .suggest strong { cursor:help; border-bottom:1px dotted #56d364; }
+  .chip.maint  { background:#21262d; border:1px solid var(--border); color:var(--muted); }
+  .chip.first  { background:#1f6feb; color:#fff; }
+  .chip.lead   { background:#3d3000; border:1px solid var(--tier-lead); color:var(--tier-lead); }
+  .chip.active { background:#1f3a5f; border:1px solid var(--tier-active); color:var(--tier-active); }
+  .chip.stale  { background:var(--stale); color:#000; }
+  .chip.hot    { background:var(--hot); color:#fff; }
+  .chip.warm   { background:#e3a000; color:#000; }
+  .chip.draft  { background:var(--draft); color:var(--fg); }
+
+  /* pr list */
+  div#pr-list { padding:16px 24px; max-width:1100px; margin:0 auto; }
+  .group-header { font-size:12px; font-weight:700; text-transform:uppercase;
+                  letter-spacing:0.5px; color:var(--muted); margin:24px 0 10px;
+                  padding-bottom:6px; border-bottom:1px solid var(--border);
+                  display:flex; align-items:center; gap:8px; }
+  .group-header:first-child { margin-top:0; }
+  .pr-card { padding:10px 14px; border:1px solid var(--border); border-radius:6px;
+             margin-bottom:8px; background:var(--panel); }
+  .pr-card.is-draft { opacity:0.7; }
+  .pr-head { display:flex; gap:8px; align-items:baseline; flex-wrap:wrap; }
+  .pr-num { color:var(--muted); font-variant-numeric:tabular-nums; font-size:13px; }
+  .pr-title { font-weight:500; flex:1; min-width:0; }
+  .pr-title a { color:var(--fg); }
+  .pr-meta { color:var(--muted); font-size:12px; margin-top:4px;
+             display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+  .pr-chips { display:flex; gap:4px; flex-wrap:wrap; margin-top:6px; }
+  .pr-chips .label-chip { font-family:ui-monospace,monospace; font-size:11px;
+                          padding:1px 6px; border-radius:10px; background:var(--bg);
+                          border:1px solid var(--border); color:var(--muted); }
+  .age-60 { color:var(--stale); font-weight:600; }
+  .age-30 { color:var(--stale); }
+  .age-14 { color:#e3a000; }
+  .empty  { color:var(--muted); text-align:center; padding:60px 0; font-size:14px; }
+
+  footer { text-align:center; font-size:12px; color:var(--muted);
+           padding:12px 24px; border-top:1px solid var(--border); margin-top:16px; }
+
+  .site-nav { display:flex; gap:0; background:var(--panel-2); border-bottom:1px solid var(--border); padding:0 24px; }
+  .site-nav a { color:var(--muted); font-size:13px; font-weight:500; padding:10px 18px; border-bottom:2px solid transparent; text-decoration:none; white-space:nowrap; }
+  .site-nav a:hover { color:var(--fg); text-decoration:none; }
+  .site-nav a.active { color:var(--fg); border-bottom-color:var(--link); }
+
+  /* focus panel */
+  details#focus-panel { padding:14px 24px; border-bottom:1px solid var(--border); background:var(--panel); }
+  details#focus-panel summary { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; color:var(--muted); cursor:pointer; user-select:none; }
+  details#focus-panel summary:hover { color:var(--fg); }
+  .focus-wg-section { margin-top:14px; }
+  .focus-wg-label { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; color:var(--muted); margin-bottom:6px; }
+  details#pulse-banner { border-bottom:1px solid var(--border); }
+  details#pulse-banner summary::-webkit-details-marker { display:none; }
+  details#pulse-banner[open] summary .pulse-toggle::after { content:" ▴"; }
+  details#pulse-banner:not([open]) summary .pulse-toggle::after { content:" ▾"; }
+  .pulse-toggle { color:var(--muted);font-size:11px;margin-left:auto; }
+  .pulse-contrib { background:var(--panel-2);border:1px solid var(--border);border-radius:4px;padding:2px 8px;font-size:12px;color:var(--fg); }
+  .pulse-table { width:100%;border-collapse:collapse;font-size:12px;margin-top:8px; }
+  .pulse-table th { text-align:left;color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px;padding:4px 8px;border-bottom:1px solid var(--border); }
+  .pulse-table td { padding:5px 8px;border-bottom:1px solid var(--border);vertical-align:top; }
+  .pulse-table tr:last-child td { border-bottom:none; }
+  .pulse-section-label { font-size:11px;text-transform:uppercase;color:var(--muted);letter-spacing:.5px; }
+  .pulse-subsummary { cursor:pointer;font-size:12px;font-weight:600;color:var(--muted);padding:4px 0;list-style:none; }
+  .pulse-subsummary::-webkit-details-marker { display:none; }
+  .pulse-subsummary::before { content:'▸ '; }
+  details[open] > .pulse-subsummary::before { content:'▾ '; }
+  .focus-cards { display:flex; gap:10px; flex-wrap:wrap; }
+  .focus-card { background:var(--panel-2); border:1px solid var(--border); border-radius:6px; padding:10px 14px; flex:1; min-width:220px; max-width:360px; position:relative; }
+  .focus-card:hover { border-color:var(--link); }
+  .focus-card a { color:var(--fg); font-size:13px; font-weight:500; }
+  .focus-card a:hover { color:var(--link); text-decoration:underline; }
+  .focus-reviewer { font-size:11px; margin-top:5px; color:#56d364; }
+  .focus-reviewer strong { color:#56d364; }
+  .focus-reviewer.no-reviewer { color:#ffa657; }
+  .score-badge { position:absolute; top:10px; right:10px; font-size:11px; font-weight:700; background:var(--panel); border:1px solid var(--border); border-radius:4px; padding:1px 6px; color:var(--muted); }
+  .focus-meta { font-size:11px; color:var(--muted); margin-top:4px; display:flex; gap:8px; flex-wrap:wrap; }
+
+  /* RFC panel */
+  details#rfc-panel { padding:14px 24px; border-bottom:1px solid var(--border); background:var(--panel); }
+  details#rfc-panel summary { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; color:var(--muted); cursor:pointer; user-select:none; }
+  details#rfc-panel summary:hover { color:var(--fg); }
+  .rfc-table { width:100%; border-collapse:collapse; font-size:12px; margin-top:12px; }
+  .rfc-table th { text-align:left; color:var(--muted); font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; padding:4px 8px; border-bottom:1px solid var(--border); }
+  .rfc-table td { padding:6px 8px; border-bottom:1px solid var(--border); vertical-align:top; }
+  .rfc-table tr:last-child td { border-bottom:none; }
+  .rfc-stale td { color:var(--stale); }
+  .rfc-very-stale td { color:var(--hot); }
+  .rfc-status-chip { display:inline-block; padding:1px 6px; border-radius:8px; font-size:10px; font-weight:600; background:var(--panel-2); border:1px solid var(--border); }
+
+  /* trend chart */
+  div#trend-chart-wrap { width:100%; overflow:hidden; }
+</style>
+</head>
+<body>
+
+<header>
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;width:100%;">
+    <div>
+      <h1 style="margin:0;font-size:17px;font-weight:600;">PR Triage — <span style="color:var(--muted);font-weight:400">lemonade-sdk/lemonade</span></h1>
+      <div style="font-size:11px;color:var(--muted);margin-top:2px;">generated 2026-11-14 18:27 UTC</div>
+    </div>
+    <a class="header-link" href="index.html" style="font-size:13px;color:var(--muted);">&#8592; Label dashboard</a>
+  </div>
+  <div id="hdr-stats" style="display:flex;gap:20px;flex-wrap:wrap;align-items:center;width:100%;padding-top:10px;border-top:1px solid var(--border);margin-top:10px;">
+    <div style="text-align:center;">
+      <div class="total-badge" id="hdr-total">—</div>
+      <div class="total-label">open PRs</div>
+    </div>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:13px;">
+      <span id="hdr-wg-count" style="color:var(--wg);">— with workgroup</span>
+      <span id="hdr-maint-count" style="color:var(--muted);">— maintainer PRs</span>
+      <span id="hdr-first-count" style="color:var(--first);">— first-timers</span>
+      <span id="hdr-stale-count" style="color:var(--staleness);">— stale 30d+</span>
+      <span id="hdr-rfc-count" style="color:var(--hot);">— RFC required</span>
+    </div>
+  </div>
+</header>
+
+<details id="pulse-banner" class="page-band" open>
+  <summary id="pulse-summary" style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:16px;flex-wrap:wrap;"></summary>
+  <div id="pulse-detail" style="margin-top:14px;"></div>
+</details>
+
+<div id="activity-chart" class="page-band">
+  <div class="chart-header">
+    <h2>PR Activity</h2>
+    <span class="legend-item"><span class="legend-dot bar-opened"></span>Opened</span>
+    <span class="legend-item"><span class="legend-dot bar-merged"></span>Merged</span>
+    <span class="legend-item"><span class="legend-dot bar-closed"></span>Closed (not merged)</span>
+    <span class="legend-item"><span style="display:inline-block;width:12px;height:2px;background:var(--staleness);border-radius:1px;margin-right:1px"></span>Open backlog</span>
+    <div class="window-ctrl">
+      <label for="day-window">Window:</label>
+      <input type="range" id="day-window" min="7" max="30" value="10" step="1">
+      <strong id="day-window-label">10 days</strong>
+    </div>
+  </div>
+  <div class="chart-area">
+    <div class="chart-baseline"></div>
+    <div class="chart-wrap" id="chart-bars"></div>
+  </div>
+  <div class="chart-stats" id="chart-stats"></div>
+</div>
+<div class="chart-row">
+  <div class="mini-chart">
+    <h3>Open PRs by Workgroup</h3>
+    <div id="wg-breakdown"></div>
+  </div>
+  <div class="mini-chart">
+    <h3>Cumulative Open PRs <span id="cumul-window" style="font-weight:400;text-transform:none;letter-spacing:0"></span></h3>
+    <div id="cumulative-chart"></div>
+  </div>
+</div>
+<div class="chart-row">
+  <div class="mini-chart" style="grid-column:1/-1">
+    <h3>Open count — last 90 days &nbsp;<span style="color:var(--stale);font-size:10px;font-weight:400;text-transform:none">&#9644; Issues</span> &nbsp;<span style="color:#d2a8ff;font-size:10px;font-weight:400;text-transform:none">&#9644; PRs</span></h3>
+    <div id="trend-chart-wrap"></div>
+  </div>
+</div>
+
+<details id="focus-panel">
+  <summary>&#9650; WG Focus — top community PRs by merit &nbsp;<span id="focus-count" style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)"></span></summary>
+  <div id="focus-body"></div>
+</details>
+
+<div id="filter-bar" class="page-band">
+  <div class="filter-group">
+    <label>Filter by</label>
+    <select id="wg-select">
+      <option value="">All PRs</option>
+      <optgroup label="Workgroup">
+              <option value="Auto-Tune">Auto-Tune (lead: @bitgamma)</option>
+      <option value="Cross-Vendor Support">Cross-Vendor Support (lead: @kenvandine)</option>
+      <option value="Cloud Hybrid">Cloud Hybrid (lead: @ramkrishna2910)</option>
+      <option value="Remote Use">Remote Use (lead: @Geramy)</option>
+      <option value="GUI App">GUI App (lead: @kpoineal)</option>
+      <option value="Enterprise Grade">Enterprise Grade (lead: @jeremyfowers)</option>
+      <option value="Platform Core">Platform Core (lead: @superm1 / @jeremyfowers)</option>
+        <option value="__unclaimed__">Unclaimed (no WG)</option>
+      </optgroup>
+      <optgroup label="Contributor">
+        <option value="__maintainers__">Maintainer PRs</option>
+        <option value="__community__">Community PRs</option>
+      </optgroup>
+    </select>
+  </div>
+
+  <div class="filter-group">
+    <label>Contributor</label>
+    <div class="toggle-row">
+      <button class="toggle" id="tog-maintainer">Maintainer PRs</button>
+      <button class="toggle" id="tog-first">First-timers</button>
+      <button class="toggle" id="tog-lead">WG Leads / Code Owners</button>
+    </div>
+  </div>
+
+  <div class="filter-group">
+    <label>Staleness</label>
+    <div class="toggle-row">
+      <button class="toggle" id="tog-stale14">14d+</button>
+      <button class="toggle" id="tog-stale30">30d+</button>
+      <button class="toggle" id="tog-stale60">60d+</button>
+    </div>
+  </div>
+
+  <div class="filter-group">
+    <label>RFC</label>
+    <div class="toggle-row">
+      <button class="toggle" id="tog-rfc-required">RFC Required</button>
+    </div>
+  </div>
+
+  <div class="filter-group">
+    <label>Routing</label>
+    <div class="toggle-row">
+      <button class="toggle" id="tog-suggested">Suggested reviewer</button>
+    </div>
+  </div>
+  <button id="clear-btn">Clear all</button>
+</div>
+
+<div id="result-bar" class="flex-row page-band">
+  <span id="result-count"></span>
+  <span class="result-breakdown" id="result-breakdown"></span>
+</div>
+
+<div id="pr-list"></div>
+
+<div id="new-prs-panel" class="page-band">
+  <div class="chart-header" style="margin-bottom:10px;">
+    <h2>New PRs — needs reviewer <span id="new-prs-count" style="font-weight:400;color:var(--muted);text-transform:none;letter-spacing:0;font-size:12px;"></span></h2>
+  </div>
+  <div id="new-prs-body"></div>
+</div>
+
+<details id="rfc-panel">
+  <summary>RFC Tracker — <span id="rfc-panel-count">0</span> open RFCs</summary>
+  <div id="rfc-body" style="overflow-x:auto"></div>
+</details>
+
+<footer>
+  Re-run <code>python .github/scripts/triage_maintainer.py</code> to refresh.
+  &nbsp;|&nbsp; <a href="index.html">Label dashboard</a>
+</footer>
+
+<script>
+const DATA = [{"number": 4167, "title": "docs: add missing persistent volumes to Docker troubleshooting example", "url": "https://github.com/lemonade-sdk/lemonade/pull/4167", "author": "siavashdev", "labels": ["documentation", "wg::platform-core"], "assignees": [], "review_requested": ["jeremyfowers"], "comments": 1, "engagement": 0, "created_at": "2026-11-14T16:03:47Z", "updated_at": "2026-11-14T16:05:37Z", "last_activity": "2026-11-14T19:35:06Z", "days_stale": -1, "days_old": 0, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 1155, "suggested_reviewers": []}, {"number": 4166, "title": "fix(flm): forward the flm checkpoint in embeddings()", "url": "https://github.com/lemonade-sdk/lemonade/pull/4166", "author": "gringus", "labels": ["bug", "engine::flm", "cpp", "wg::platform-core"], "assignees": [], "review_requested": [], "comments": 1, "engagement": 0, "created_at": "2026-11-14T12:56:59Z", "updated_at": "2026-11-14T13:02:08Z", "last_activity": "2026-11-14T12:58:42Z", "days_stale": 0, "days_old": 0, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": false, "community_tier": "returning", "is_draft": false, "priority_score": 355, "suggested_reviewers": [{"login": "superm1", "score": 0.11, "why": "history on 1/1 files \u00b7 Platform Core lead \u00b7 load 16"}, {"login": "meghsat", "score": 0.085, "why": "history on 1/1 files \u00b7 load 9"}]}, {"number": 4163, "title": "fix(ollama): pass images and audio through /api/generate and report audio", "url": "https://github.com/lemonade-sdk/lemonade/pull/4163", "author": "sreeram-11", "labels": ["enhancement", "audio", "engine::llamacpp", "area::api"], "assignees": [], "review_requested": ["bitgamma", "jeremyfowers"], "comments": 1, "engagement": 1, "created_at": "2026-11-13T21:38:19Z", "updated_at": "2026-11-14T01:19:37Z", "last_activity": "2026-11-13T23:11:07Z", "days_stale": 0, "days_old": 0, "wg": null, "wg_source": null, "wg_reason": null, "rfc_status": null, "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 1155, "suggested_reviewers": []}, {"number": 4160, "title": "feat(ollama): report speech and decision capabilities in /api/show", "url": "https://github.com/lemonade-sdk/lemonade/pull/4160", "author": "sreeram-11", "labels": ["audio", "engine::kokoro", "area::api"], "assignees": [], "review_requested": ["bitgamma", "jeremyfowers"], "comments": 2, "engagement": 1, "created_at": "2026-11-13T20:35:55Z", "updated_at": "2026-11-14T01:21:20Z", "last_activity": "2026-11-14T01:19:37Z", "days_stale": 0, "days_old": 0, "wg": null, "wg_source": null, "wg_reason": null, "rfc_status": null, "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 1160, "suggested_reviewers": []}, {"number": 4159, "title": "Run gufo from gufo-org/toolboxes images", "url": "https://github.com/lemonade-sdk/lemonade/pull/4159", "author": "francescobozzo", "labels": ["bug"], "assignees": [], "review_requested": [], "comments": 3, "engagement": 4, "created_at": "2026-11-13T20:32:52Z", "updated_at": "2026-11-14T11:16:07Z", "last_activity": "2026-11-14T11:16:07Z", "days_stale": 0, "days_old": 0, "wg": null, "wg_source": null, "wg_reason": null, "rfc_status": null, "is_maintainer": false, "community_tier": "returning", "is_draft": false, "priority_score": 365, "suggested_reviewers": []}, {"number": 4158, "title": "fix(ollama): resolve model aliases in /api/show", "url": "https://github.com/lemonade-sdk/lemonade/pull/4158", "author": "sreeram-11", "labels": ["engine::llamacpp", "area::api"], "assignees": [], "review_requested": ["iswaryaalex", "jeremyfowers"], "comments": 2, "engagement": 2, "created_at": "2026-11-13T19:28:40Z", "updated_at": "2026-11-14T15:08:28Z", "last_activity": "2026-11-14T15:08:28Z", "days_stale": 0, "days_old": 0, "wg": null, "wg_source": null, "wg_reason": null, "rfc_status": null, "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 1160, "suggested_reviewers": []}, {"number": 4157, "title": "fix(ollama): end failed /api/chat and /api/generate streams with an error line", "url": "https://github.com/lemonade-sdk/lemonade/pull/4157", "author": "sreeram-11", "labels": ["bug", "documentation", "engine::llamacpp", "area::api"], "assignees": [], "review_requested": ["iswaryaalex", "jeremyfowers"], "comments": 2, "engagement": 2, "created_at": "2026-11-13T19:22:04Z", "updated_at": "2026-11-14T02:07:30Z", "last_activity": "2026-11-14T02:07:29Z", "days_stale": 0, "days_old": 0, "wg": null, "wg_source": null, "wg_reason": null, "rfc_status": null, "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 1410, "suggested_reviewers": []}, {"number": 4153, "title": "fix(gui): preserve spaces in freeform backend args", "url": "https://github.com/lemonade-sdk/lemonade/pull/4153", "author": "vjanelle", "labels": ["bug", "web ui", "app", "area::cli", "wg::gui-app"], "assignees": [], "review_requested": ["kpoineal", "jeremyfowers"], "comments": 1, "engagement": 1, "created_at": "2026-11-12T21:47:43Z", "updated_at": "2026-11-13T17:11:25Z", "last_activity": "2026-11-13T16:36:57Z", "days_stale": 1, "days_old": 1, "wg": "GUI App", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": false, "community_tier": "returning", "is_draft": false, "priority_score": 555, "suggested_reviewers": []}, {"number": 4150, "title": "fix(cli): support OpenCode v2 launch configuration (#4149)", "url": "https://github.com/lemonade-sdk/lemonade/pull/4150", "author": "vjanelle", "labels": ["bug", "area::cli", "wg::platform-core"], "assignees": [], "review_requested": ["bitgamma", "jeremyfowers"], "comments": 2, "engagement": 1, "created_at": "2026-11-12T19:11:43Z", "updated_at": "2026-11-13T17:11:36Z", "last_activity": "2026-11-12T23:09:50Z", "days_stale": 1, "days_old": 1, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": false, "community_tier": "returning", "is_draft": false, "priority_score": 560, "suggested_reviewers": []}, {"number": 4148, "title": "feat(gui): allow inference engine changes through custom model overrides", "url": "https://github.com/lemonade-sdk/lemonade/pull/4148", "author": "fl0rianr", "labels": ["app", "area::api", "wg::gui-app"], "assignees": [], "review_requested": ["kpoineal", "jeremyfowers"], "comments": 1, "engagement": 0, "created_at": "2026-11-12T18:53:22Z", "updated_at": "2026-11-13T08:11:49Z", "last_activity": "2026-11-12T22:51:13Z", "days_stale": 1, "days_old": 1, "wg": "GUI App", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 1155, "suggested_reviewers": []}, {"number": 4144, "title": "Clean up old TheRock installs across tarball and wheel dirs", "url": "https://github.com/lemonade-sdk/lemonade/pull/4144", "author": "superm1", "labels": ["area::installer", "wg::platform-core"], "assignees": [], "review_requested": ["sreeram-11"], "comments": 2, "engagement": 1, "created_at": "2026-11-12T17:02:36Z", "updated_at": "2026-11-13T21:08:37Z", "last_activity": "2026-11-13T21:08:37Z", "days_stale": 0, "days_old": 2, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 1160, "suggested_reviewers": []}, {"number": 4141, "title": "fix: keep WebSocket API keys out of URLs", "url": "https://github.com/lemonade-sdk/lemonade/pull/4141", "author": "itomek", "labels": ["bug", "area::api", "wg::platform-core"], "assignees": [], "review_requested": ["kpoineal", "jeremyfowers"], "comments": 1, "engagement": 0, "created_at": "2026-11-12T15:59:23Z", "updated_at": "2026-11-13T17:11:42Z", "last_activity": "2026-11-12T16:30:41Z", "days_stale": 2, "days_old": 2, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": false, "community_tier": "active", "is_draft": false, "priority_score": 805, "suggested_reviewers": []}, {"number": 4138, "title": "Fix TheNoise custom image model registration", "url": "https://github.com/lemonade-sdk/lemonade/pull/4138", "author": "fl0rianr", "labels": ["bug", "enhancement", "engine::sd", "wg::gui-app"], "assignees": [], "review_requested": ["kpoineal", "jeremyfowers"], "comments": 2, "engagement": 1, "created_at": "2026-11-12T10:03:41Z", "updated_at": "2026-11-13T17:11:49Z", "last_activity": "2026-11-13T16:23:05Z", "days_stale": 1, "days_old": 2, "wg": "GUI App", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 1410, "suggested_reviewers": []}, {"number": 4136, "title": "docs(api): add vLLM chat completion examples", "url": "https://github.com/lemonade-sdk/lemonade/pull/4136", "author": "fl0rianr", "labels": ["documentation", "engine::vllm", "area::api", "wg::platform-core"], "assignees": [], "review_requested": [], "comments": 1, "engagement": 0, "created_at": "2026-11-12T02:20:53Z", "updated_at": "2026-11-13T17:12:16Z", "last_activity": "2026-11-12T09:45:58Z", "days_stale": 2, "days_old": 2, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 955, "suggested_reviewers": [{"login": "meghsat", "score": 0.094, "why": "history on 2/3 files \u00b7 load 8"}, {"login": "jeremyfowers", "score": 0.094, "why": "history on 3/3 files \u00b7 Platform Core lead \u00b7 load 55"}]}, {"number": 4135, "title": "fix(gui): Updating the ModelScope assets to GUI3", "url": "https://github.com/lemonade-sdk/lemonade/pull/4135", "author": "meghsat", "labels": ["bug", "web ui", "area::installer", "wg::gui-app"], "assignees": [], "review_requested": [], "comments": 1, "engagement": 2, "created_at": "2026-11-12T01:36:33Z", "updated_at": "2026-11-14T03:00:11Z", "last_activity": "2026-11-14T02:59:54Z", "days_stale": 0, "days_old": 2, "wg": "GUI App", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 1205, "suggested_reviewers": []}, {"number": 4128, "title": "feat(backends): Add Strata v0.2.13", "url": "https://github.com/lemonade-sdk/lemonade/pull/4128", "author": "julianxhokaxhiu", "labels": ["enhancement", "wg::platform-core"], "assignees": [], "review_requested": ["kpoineal", "iswaryaalex", "jeremyfowers"], "comments": 13, "engagement": 3, "created_at": "2026-11-10T22:23:34Z", "updated_at": "2026-11-13T23:28:41Z", "last_activity": "2026-11-13T23:28:41Z", "days_stale": 0, "days_old": 3, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": false, "community_tier": "returning", "is_draft": false, "priority_score": 365, "suggested_reviewers": []}, {"number": 4118, "title": "Update llama.cpp to b12233", "url": "https://github.com/lemonade-sdk/lemonade/pull/4118", "author": "github-actions[bot]", "labels": ["engine::llamacpp", "runtime::vulkan", "ci:backends", "wg::enterprise-grade"], "assignees": [], "review_requested": [], "comments": 5, "engagement": 5, "created_at": "2026-11-09T21:12:12Z", "updated_at": "2026-11-13T01:08:16Z", "last_activity": "2026-11-12T17:40:00Z", "days_stale": 2, "days_old": 4, "wg": "Enterprise Grade", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": false, "community_tier": "active", "is_draft": false, "priority_score": 375, "suggested_reviewers": []}, {"number": 4114, "title": "fix(docs): only re-commit API examples whose response shape changed", "url": "https://github.com/lemonade-sdk/lemonade/pull/4114", "author": "jeremyfowers", "labels": ["documentation", "enhancement", "engine::llamacpp", "area::ci"], "assignees": ["sreeram-11", "fl0rianr"], "review_requested": ["fl0rianr"], "comments": 5, "engagement": 5, "created_at": "2026-11-09T20:16:35Z", "updated_at": "2026-11-12T02:25:17Z", "last_activity": "2026-11-12T02:24:09Z", "days_stale": 2, "days_old": 4, "wg": null, "wg_source": null, "wg_reason": null, "rfc_status": null, "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 1175, "suggested_reviewers": []}, {"number": 4110, "title": "feat(chat): support seamless follow-up prompts during generation", "url": "https://github.com/lemonade-sdk/lemonade/pull/4110", "author": "fl0rianr", "labels": ["enhancement", "wg::gui-app"], "assignees": [], "review_requested": ["kpoineal", "meghsat", "jeremyfowers"], "comments": 1, "engagement": 0, "created_at": "2026-11-08T23:36:33Z", "updated_at": "2026-11-11T06:46:22Z", "last_activity": "2026-11-09T16:19:48Z", "days_stale": 5, "days_old": 5, "wg": "GUI App", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 1055, "suggested_reviewers": []}, {"number": 4107, "title": "Update container backend image pins", "url": "https://github.com/lemonade-sdk/lemonade/pull/4107", "author": "github-actions[bot]", "labels": ["enhancement", "wg::platform-core"], "assignees": [], "review_requested": [], "comments": 1, "engagement": 0, "created_at": "2026-11-08T18:10:55Z", "updated_at": "2026-11-11T06:46:26Z", "last_activity": "2026-11-08T18:10:55Z", "days_stale": 6, "days_old": 6, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": false, "community_tier": "active", "is_draft": false, "priority_score": 255, "suggested_reviewers": [{"login": "superm1", "score": 0.127, "why": "history on 1/1 files \u00b7 Platform Core lead \u00b7 load 15"}]}, {"number": 4101, "title": "Nexus mesh: bulk uploads through the relay 27 -\u003e 40 MB/s (builds on #4100)", "url": "https://github.com/lemonade-sdk/lemonade/pull/4101", "author": "festeraeb", "labels": ["wg::remote-use"], "assignees": [], "review_requested": [], "comments": 1, "engagement": 0, "created_at": "2026-11-08T03:55:24Z", "updated_at": "2026-11-14T17:57:17Z", "last_activity": "2026-11-14T17:57:11Z", "days_stale": 0, "days_old": 6, "wg": "Remote Use", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": false, "community_tier": "returning", "is_draft": false, "priority_score": 105, "suggested_reviewers": [{"login": "meghsat", "score": 0.126, "why": "history on 8/8 files \u00b7 load 7"}, {"login": "Geramy", "score": 0.108, "why": "history on 8/8 files \u00b7 Remote Use lead \u00b7 load 9"}]}, {"number": 4100, "title": "Nexus mesh: turn off Nagle and delayed ACK (request latency 30 -\u003e 13 ms)", "url": "https://github.com/lemonade-sdk/lemonade/pull/4100", "author": "festeraeb", "labels": ["enhancement", "wg::cloud-hybrid"], "assignees": [], "review_requested": [], "comments": 1, "engagement": 0, "created_at": "2026-11-08T02:37:36Z", "updated_at": "2026-11-11T06:46:41Z", "last_activity": "2026-11-10T05:29:27Z", "days_stale": 4, "days_old": 6, "wg": "Cloud Hybrid", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": false, "community_tier": "returning", "is_draft": false, "priority_score": 5, "suggested_reviewers": [{"login": "meghsat", "score": 0.135, "why": "history on 3/3 files \u00b7 load 6"}]}, {"number": 4099, "title": "Nexus on Arch and on headless servers: build fixes + one-time setup code", "url": "https://github.com/lemonade-sdk/lemonade/pull/4099", "author": "festeraeb", "labels": ["enhancement", "wg::platform-core"], "assignees": [], "review_requested": ["kpoineal", "jeremyfowers"], "comments": 1, "engagement": 0, "created_at": "2026-11-08T00:30:00Z", "updated_at": "2026-11-14T17:57:16Z", "last_activity": "2026-11-14T17:57:09Z", "days_stale": 0, "days_old": 6, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": false, "community_tier": "returning", "is_draft": false, "priority_score": 305, "suggested_reviewers": []}, {"number": 4098, "title": "LAN servers in Devices \u0026 mesh: Found on this network, with Invite / Use directly / Ignore (#1221)", "url": "https://github.com/lemonade-sdk/lemonade/pull/4098", "author": "festeraeb", "labels": ["wg::gui-app"], "assignees": [], "review_requested": ["kpoineal", "jeremyfowers"], "comments": 1, "engagement": 0, "created_at": "2026-11-07T21:06:38Z", "updated_at": "2026-11-14T18:21:09Z", "last_activity": "2026-11-14T18:20:58Z", "days_stale": 0, "days_old": 6, "wg": "GUI App", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": false, "community_tier": "returning", "is_draft": false, "priority_score": 305, "suggested_reviewers": []}, {"number": 4097, "title": "fix(models): skip GGUFs unsupported by llama.cpp in extra_models_dir", "url": "https://github.com/lemonade-sdk/lemonade/pull/4097", "author": "pwilkin", "labels": ["engine::llamacpp", "wg::platform-core"], "assignees": [], "review_requested": ["fl0rianr"], "comments": 1, "engagement": 0, "created_at": "2026-11-07T20:15:16Z", "updated_at": "2026-11-11T06:46:52Z", "last_activity": "2026-11-08T15:48:34Z", "days_stale": 6, "days_old": 6, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 1055, "suggested_reviewers": []}, {"number": 4095, "title": "build: add per-user Linux install with systemd --user service", "url": "https://github.com/lemonade-sdk/lemonade/pull/4095", "author": "pwilkin", "labels": ["enhancement", "area::installer", "wg::platform-core"], "assignees": [], "review_requested": ["bitgamma", "jeremyfowers"], "comments": 3, "engagement": 5, "created_at": "2026-11-07T16:36:12Z", "updated_at": "2026-11-11T06:46:56Z", "last_activity": "2026-11-10T02:59:54Z", "days_stale": 4, "days_old": 7, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 1065, "suggested_reviewers": []}, {"number": 4089, "title": "fix(server): preserve GPU discovery order instead of sorting by VRAM", "url": "https://github.com/lemonade-sdk/lemonade/pull/4089", "author": "fl0rianr", "labels": ["bug", "wg::platform-core"], "assignees": [], "review_requested": [], "comments": 1, "engagement": 0, "created_at": "2026-11-07T00:38:37Z", "updated_at": "2026-11-11T06:47:08Z", "last_activity": "2026-11-07T14:56:25Z", "days_stale": 7, "days_old": 7, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 1105, "suggested_reviewers": [{"login": "jeremyfowers", "score": 0.126, "why": "history on 5/5 files \u00b7 Platform Core lead \u00b7 load 54"}, {"login": "superm1", "score": 0.102, "why": "history on 2/5 files \u00b7 Platform Core lead \u00b7 load 14"}]}, {"number": 4085, "title": "ci(containers): bump nathanw, keep the smoke test on the last image the runner can run", "url": "https://github.com/lemonade-sdk/lemonade/pull/4085", "author": "sawansri", "labels": ["area::ci", "wg::enterprise-grade"], "assignees": [], "review_requested": [], "comments": 1, "engagement": 0, "created_at": "2026-11-06T21:52:11Z", "updated_at": "2026-11-11T06:47:20Z", "last_activity": "2026-11-06T21:52:11Z", "days_stale": 7, "days_old": 7, "wg": "Enterprise Grade", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 855, "suggested_reviewers": [{"login": "jeremyfowers", "score": 0.082, "why": "history on 2/2 files \u00b7 Enterprise Grade lead \u00b7 load 53"}]}, {"number": 4081, "title": "feat(gui): video models in the chat and model list", "url": "https://github.com/lemonade-sdk/lemonade/pull/4081", "author": "Bekhouche", "labels": ["enhancement", "app", "wg::gui-app"], "assignees": [], "review_requested": ["kpoineal", "jeremyfowers"], "comments": 2, "engagement": 2, "created_at": "2026-11-06T09:12:16Z", "updated_at": "2026-11-11T06:47:25Z", "last_activity": "2026-11-10T11:54:25Z", "days_stale": 4, "days_old": 8, "wg": "GUI App", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 860, "suggested_reviewers": []}, {"number": 4070, "title": "Align Nexus status dots and panel spacing", "url": "https://github.com/lemonade-sdk/lemonade/pull/4070", "author": "falabellamichael", "labels": ["enhancement", "wg::gui-app"], "assignees": [], "review_requested": ["kpoineal", "jeremyfowers"], "comments": 1, "engagement": 0, "created_at": "2026-11-05T12:29:38Z", "updated_at": "2026-11-11T06:47:59Z", "last_activity": "2026-11-05T12:29:38Z", "days_stale": 9, "days_old": 9, "wg": "GUI App", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": false, "community_tier": "returning", "is_draft": false, "priority_score": 205, "suggested_reviewers": []}, {"number": 4067, "title": "chore(flm): bump FLM to v1.0.13", "url": "https://github.com/lemonade-sdk/lemonade/pull/4067", "author": "zaneni6", "labels": ["enhancement", "engine::flm", "wg::platform-core"], "assignees": [], "review_requested": ["iswaryaalex", "sreeram-11"], "comments": 1, "engagement": 0, "created_at": "2026-11-05T01:54:55Z", "updated_at": "2026-11-13T23:55:17Z", "last_activity": "2026-11-13T23:51:21Z", "days_stale": 0, "days_old": 9, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": false, "community_tier": "active", "is_draft": false, "priority_score": 555, "suggested_reviewers": []}, {"number": 4063, "title": "feat(mcp): expose filtered server logs to MCP and GUI3 chat", "url": "https://github.com/lemonade-sdk/lemonade/pull/4063", "author": "fl0rianr", "labels": ["enhancement", "wg::gui-app"], "assignees": [], "review_requested": ["kpoineal", "jeremyfowers"], "comments": 1, "engagement": 0, "created_at": "2026-11-04T21:14:24Z", "updated_at": "2026-11-11T06:48:12Z", "last_activity": "2026-11-10T12:15:32Z", "days_stale": 4, "days_old": 9, "wg": "GUI App", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 855, "suggested_reviewers": []}, {"number": 4043, "title": "fix(backends): hide uninstall button when unsupported", "url": "https://github.com/lemonade-sdk/lemonade/pull/4043", "author": "anditherobot", "labels": ["enhancement", "wg::gui-app"], "assignees": [], "review_requested": ["kpoineal", "jeremyfowers"], "comments": 1, "engagement": 0, "created_at": "2026-11-02T22:05:38Z", "updated_at": "2026-11-11T22:23:49Z", "last_activity": "2026-11-11T22:23:35Z", "days_stale": 2, "days_old": 11, "wg": "GUI App", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 955, "suggested_reviewers": []}, {"number": 4040, "title": "Restore Nexus management on private networks", "url": "https://github.com/lemonade-sdk/lemonade/pull/4040", "author": "falabellamichael", "labels": ["enhancement", "wg::platform-core"], "assignees": [], "review_requested": ["ramkrishna2910", "jeremyfowers"], "comments": 1, "engagement": 1, "created_at": "2026-11-02T16:48:47Z", "updated_at": "2026-11-11T06:48:34Z", "last_activity": "2026-11-02T17:11:33Z", "days_stale": 12, "days_old": 12, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": false, "community_tier": "returning", "is_draft": false, "priority_score": 205, "suggested_reviewers": []}, {"number": 4033, "title": "fix(gui3): scope custom model exports and improve import UX (#4017, #4018)", "url": "https://github.com/lemonade-sdk/lemonade/pull/4033", "author": "fl0rianr", "labels": ["enhancement", "app", "wg::gui-app"], "assignees": [], "review_requested": ["kpoineal", "choppu", "jeremyfowers"], "comments": 1, "engagement": 0, "created_at": "2026-10-31T16:37:12Z", "updated_at": "2026-11-11T06:48:56Z", "last_activity": "2026-10-31T22:40:19Z", "days_stale": 13, "days_old": 14, "wg": "GUI App", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 855, "suggested_reviewers": []}, {"number": 4024, "title": "feat(gui): Add cancellable model loading with estimated progress", "url": "https://github.com/lemonade-sdk/lemonade/pull/4024", "author": "fl0rianr", "labels": ["enhancement", "app", "wg::gui-app"], "assignees": [], "review_requested": ["kpoineal", "jeremyfowers"], "comments": 1, "engagement": 0, "created_at": "2026-10-30T17:41:15Z", "updated_at": "2026-11-11T06:49:11Z", "last_activity": "2026-11-02T09:50:05Z", "days_stale": 12, "days_old": 15, "wg": "GUI App", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 855, "suggested_reviewers": []}, {"number": 4006, "title": "feat: FLM on XDNA3 with a user-supplied FastFlowLM", "url": "https://github.com/lemonade-sdk/lemonade/pull/4006", "author": "chizamd", "labels": ["enhancement", "engine::flm", "wg::cross-vendor-support"], "assignees": [], "review_requested": ["iswaryaalex"], "comments": 1, "engagement": 2, "created_at": "2026-10-29T16:50:12Z", "updated_at": "2026-11-11T06:49:32Z", "last_activity": "2026-11-01T20:02:30Z", "days_stale": 12, "days_old": 16, "wg": "Cross-Vendor Support", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": false, "community_tier": "returning", "is_draft": false, "priority_score": 205, "suggested_reviewers": []}, {"number": 4004, "title": "feat: add backend device selection", "url": "https://github.com/lemonade-sdk/lemonade/pull/4004", "author": "fl0rianr", "labels": ["enhancement", "wg::gui-app"], "assignees": [], "review_requested": ["kpoineal", "meghsat", "jeremyfowers"], "comments": 3, "engagement": 2, "created_at": "2026-10-29T15:05:48Z", "updated_at": "2026-11-14T14:47:51Z", "last_activity": "2026-11-14T14:44:06Z", "days_stale": 0, "days_old": 16, "wg": "GUI App", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 965, "suggested_reviewers": []}, {"number": 3999, "title": "fix(ui): Offer multi-GPU device selections in recipe settings", "url": "https://github.com/lemonade-sdk/lemonade/pull/3999", "author": "fl0rianr", "labels": ["enhancement", "app", "wg::gui-app"], "assignees": [], "review_requested": ["kpoineal", "jeremyfowers"], "comments": 2, "engagement": 0, "created_at": "2026-10-28T23:57:31Z", "updated_at": "2026-11-11T06:49:40Z", "last_activity": "2026-11-05T18:22:07Z", "days_stale": 9, "days_old": 16, "wg": "GUI App", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 860, "suggested_reviewers": []}, {"number": 3998, "title": "fix(server): remove global inference timeout and decouple operationl deadline", "url": "https://github.com/lemonade-sdk/lemonade/pull/3998", "author": "fl0rianr", "labels": ["enhancement", "ci:backends", "wg::platform-core"], "assignees": [], "review_requested": ["Geramy", "jeremyfowers"], "comments": 4, "engagement": 3, "created_at": "2026-10-28T23:41:05Z", "updated_at": "2026-11-11T06:49:44Z", "last_activity": "2026-11-06T11:04:11Z", "days_stale": 8, "days_old": 16, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 870, "suggested_reviewers": []}, {"number": 3988, "title": "fix(auto-tune): correct AMD UMA budgets and preserve CPU offload", "url": "https://github.com/lemonade-sdk/lemonade/pull/3988", "author": "fl0rianr", "labels": ["bug", "cpp", "engine::llamacpp", "area::api", "runtime::rocm", "ci:backends", "wg::auto-tune"], "assignees": [], "review_requested": ["bitgamma"], "comments": 1, "engagement": 0, "created_at": "2026-10-27T23:44:28Z", "updated_at": "2026-11-11T06:50:04Z", "last_activity": "2026-11-09T00:25:08Z", "days_stale": 5, "days_old": 17, "wg": "Auto-Tune", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 1105, "suggested_reviewers": []}, {"number": 3983, "title": "fix(server): guard chat message content extraction against JSON null", "url": "https://github.com/lemonade-sdk/lemonade/pull/3983", "author": "mike2307", "labels": ["bug", "cpp", "engine::vllm", "wg::platform-core"], "assignees": [], "review_requested": [], "comments": 1, "engagement": 0, "created_at": "2026-10-27T20:01:54Z", "updated_at": "2026-11-11T06:50:07Z", "last_activity": "2026-10-27T20:01:54Z", "days_stale": 17, "days_old": 17, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": false, "community_tier": "returning", "is_draft": false, "priority_score": 180, "suggested_reviewers": [{"login": "superm1", "score": 0.096, "why": "history on 3/4 files \u00b7 Platform Core lead \u00b7 load 13"}, {"login": "bitgamma", "score": 0.075, "why": "history on 3/4 files \u00b7 load 17"}]}, {"number": 3975, "title": "fix(ci): validate sd-cpp auto-updates and flag failed checks", "url": "https://github.com/lemonade-sdk/lemonade/pull/3975", "author": "fl0rianr", "labels": ["cpp", "engine::sd", "area::ci", "wg::enterprise-grade"], "assignees": [], "review_requested": ["sreeram-11"], "comments": 1, "engagement": 0, "created_at": "2026-10-26T17:23:29Z", "updated_at": "2026-11-11T06:50:07Z", "last_activity": "2026-10-26T18:07:29Z", "days_stale": 19, "days_old": 19, "wg": "Enterprise Grade", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 780, "suggested_reviewers": []}, {"number": 3965, "title": "fix(ci): make llama.cpp auto-update documentation failures visible", "url": "https://github.com/lemonade-sdk/lemonade/pull/3965", "author": "fl0rianr", "labels": ["bug", "engine::llamacpp", "area::ci", "ci:backends", "rfc:not-required", "wg::enterprise-grade"], "assignees": [], "review_requested": ["sreeram-11"], "comments": 2, "engagement": 1, "created_at": "2026-10-24T11:59:06Z", "updated_at": "2026-11-13T17:11:22Z", "last_activity": "2026-11-10T00:21:40Z", "days_stale": 4, "days_old": 21, "wg": "Enterprise Grade", "wg_source": "label", "wg_reason": null, "rfc_status": "not-required", "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 1110, "suggested_reviewers": []}, {"number": 3953, "title": "Add AMICA backend support to Lemonade", "url": "https://github.com/lemonade-sdk/lemonade/pull/3953", "author": "Zhaeong", "labels": ["enhancement", "cpp", "area::api", "wg::cross-vendor-support"], "assignees": [], "review_requested": [], "comments": 1, "engagement": 0, "created_at": "2026-10-23T01:29:22Z", "updated_at": "2026-11-13T16:52:16Z", "last_activity": "2026-11-13T16:46:19Z", "days_stale": 1, "days_old": 22, "wg": "Cross-Vendor Support", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": false, "community_tier": "returning", "is_draft": false, "priority_score": 105, "suggested_reviewers": [{"login": "kenvandine", "score": 0.158, "why": "history on 46/50 files \u00b7 Cross-Vendor Support lead \u00b7 load 3"}]}, {"number": 3937, "title": "fix(server): harden chat and Anthropic response handling", "url": "https://github.com/lemonade-sdk/lemonade/pull/3937", "author": "fl0rianr", "labels": ["bug", "cpp", "area::api", "rfc:not-required", "wg::platform-core"], "assignees": [], "review_requested": ["abn"], "comments": 1, "engagement": 0, "created_at": "2026-10-22T14:06:46Z", "updated_at": "2026-11-11T06:50:08Z", "last_activity": "2026-10-22T14:06:46Z", "days_stale": 23, "days_old": 23, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": "not-required", "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 905, "suggested_reviewers": []}, {"number": 3935, "title": "fix(trellis): correct HTTP error handling and watchdog retrial", "url": "https://github.com/lemonade-sdk/lemonade/pull/3935", "author": "fl0rianr", "labels": ["bug", "engine::llamacpp", "ci:backends", "wg::platform-core"], "assignees": [], "review_requested": ["pwilkin"], "comments": 1, "engagement": 0, "created_at": "2026-10-22T13:39:43Z", "updated_at": "2026-11-11T06:50:30Z", "last_activity": "2026-10-22T13:39:43Z", "days_stale": 23, "days_old": 23, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 905, "suggested_reviewers": []}, {"number": 3930, "title": "Integrate Nexus SDK, device management, and mesh inference selection", "url": "https://github.com/lemonade-sdk/lemonade/pull/3930", "author": "Geramy", "labels": ["enhancement", "app", "ci:macos", "ci:distros", "wg::cloud-hybrid"], "assignees": [], "review_requested": ["ramkrishna2910", "bitgamma", "kpoineal"], "comments": 43, "engagement": 2, "created_at": "2026-10-22T03:49:09Z", "updated_at": "2026-11-13T22:13:05Z", "last_activity": "2026-11-13T22:10:51Z", "days_stale": 0, "days_old": 23, "wg": "Cloud Hybrid", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 900, "suggested_reviewers": []}, {"number": 3894, "title": "fix(router): skip the evict-and-retry when no other model is loaded", "url": "https://github.com/lemonade-sdk/lemonade/pull/3894", "author": "bernardogv", "labels": ["area::api", "wg::platform-core"], "assignees": [], "review_requested": [], "comments": 2, "engagement": 1, "created_at": "2026-10-17T22:01:39Z", "updated_at": "2026-11-11T06:51:02Z", "last_activity": "2026-11-04T09:12:20Z", "days_stale": 10, "days_old": 27, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": false, "community_tier": "returning", "is_draft": false, "priority_score": 10, "suggested_reviewers": [{"login": "abn", "score": 0.184, "why": "history on 2/2 files \u00b7 load 6"}, {"login": "jeremyfowers", "score": 0.132, "why": "history on 2/2 files \u00b7 Platform Core lead \u00b7 load 52"}]}, {"number": 3875, "title": "Fix `lemonade launch opencode` for opencode v2", "url": "https://github.com/lemonade-sdk/lemonade/pull/3875", "author": "sawansri", "labels": ["area::cli"], "assignees": [], "review_requested": ["bitgamma", "jeremyfowers"], "comments": 1, "engagement": 0, "created_at": "2026-10-16T03:29:47Z", "updated_at": "2026-11-12T22:35:04Z", "last_activity": "2026-11-12T22:15:36Z", "days_stale": 1, "days_old": 29, "wg": null, "wg_source": null, "wg_reason": null, "rfc_status": null, "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 830, "suggested_reviewers": []}, {"number": 3840, "title": "fix(macos): restore Lemonade.app bundle name", "url": "https://github.com/lemonade-sdk/lemonade/pull/3840", "author": "fl0rianr", "labels": ["area::installer", "ci:macos", "ci:distros", "wg::platform-core"], "assignees": [], "review_requested": ["Geramy", "kpoineal", "jeremyfowers"], "comments": 1, "engagement": 0, "created_at": "2026-10-13T22:48:44Z", "updated_at": "2026-11-11T06:51:17Z", "last_activity": "2026-10-13T23:31:06Z", "days_stale": 31, "days_old": 31, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 530, "suggested_reviewers": []}, {"number": 3838, "title": "fix(router): don't hold the router lock while unload waits for a busy model", "url": "https://github.com/lemonade-sdk/lemonade/pull/3838", "author": "thowolf", "labels": ["bug", "cpp", "engine::llamacpp", "runtime::vulkan", "wg::platform-core"], "assignees": [], "review_requested": [], "comments": 1, "engagement": 0, "created_at": "2026-10-13T20:26:38Z", "updated_at": "2026-11-13T07:08:02Z", "last_activity": "2026-11-13T07:01:40Z", "days_stale": 1, "days_old": 31, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": false, "community_tier": "returning", "is_draft": false, "priority_score": 355, "suggested_reviewers": [{"login": "superm1", "score": 0.099, "why": "history on 4/4 files \u00b7 Platform Core lead \u00b7 load 12"}, {"login": "bitgamma", "score": 0.077, "why": "history on 4/4 files \u00b7 load 16"}]}, {"number": 3822, "title": "fix(windows): add desktop app shortcuts and correct launcher path", "url": "https://github.com/lemonade-sdk/lemonade/pull/3822", "author": "fl0rianr", "labels": ["app", "area::installer", "ci:distros", "wg::platform-core"], "assignees": [], "review_requested": [], "comments": 1, "engagement": 0, "created_at": "2026-10-13T11:10:37Z", "updated_at": "2026-11-11T06:51:12Z", "last_activity": "2026-10-13T11:10:37Z", "days_stale": 32, "days_old": 32, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 330, "suggested_reviewers": [{"login": "superm1", "score": 0.226, "why": "history on 2/2 files \u00b7 Platform Core lead \u00b7 load 11"}]}, {"number": 3796, "title": "Feat/cloud alpha generate fallback", "url": "https://github.com/lemonade-sdk/lemonade/pull/3796", "author": "radqnico", "labels": ["enhancement", "area::api", "wg::cloud-hybrid"], "assignees": [], "review_requested": ["bitgamma", "kpoineal", "jeremyfowers"], "comments": 1, "engagement": 0, "created_at": "2026-10-10T23:42:25Z", "updated_at": "2026-11-11T06:51:15Z", "last_activity": "2026-10-10T23:42:25Z", "days_stale": 34, "days_old": 34, "wg": "Cloud Hybrid", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": false, "community_tier": "returning", "is_draft": false, "priority_score": 5, "suggested_reviewers": []}, {"number": 3783, "title": "fix(server): back off when GitHub rate-limits latest-version lookups", "url": "https://github.com/lemonade-sdk/lemonade/pull/3783", "author": "joshuacox", "labels": ["bug", "enhancement", "cpp", "wg::platform-core"], "assignees": [], "review_requested": [], "comments": 2, "engagement": 1, "created_at": "2026-10-09T12:43:37Z", "updated_at": "2026-11-11T06:50:37Z", "last_activity": "2026-10-13T02:52:00Z", "days_stale": 32, "days_old": 36, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": false, "community_tier": "returning", "is_draft": false, "priority_score": 60, "suggested_reviewers": [{"login": "superm1", "score": 0.109, "why": "history on 4/6 files \u00b7 Platform Core lead \u00b7 load 10"}]}, {"number": 3782, "title": "fix(server): strip wrapper folder when extracting backend zips", "url": "https://github.com/lemonade-sdk/lemonade/pull/3782", "author": "joshuacox", "labels": ["enhancement", "engine::flm", "cpp", "wg::platform-core"], "assignees": [], "review_requested": [], "comments": 2, "engagement": 1, "created_at": "2026-10-09T12:43:34Z", "updated_at": "2026-11-11T06:50:41Z", "last_activity": "2026-10-13T02:53:12Z", "days_stale": 32, "days_old": 36, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": false, "community_tier": "returning", "is_draft": false, "priority_score": -190, "suggested_reviewers": [{"login": "superm1", "score": 0.379, "why": "history on 3/4 files \u00b7 Platform Core lead \u00b7 load 9"}]}, {"number": 3781, "title": "fix(server): skip uncommitted snapshots in shared checkpoint resolution", "url": "https://github.com/lemonade-sdk/lemonade/pull/3781", "author": "joshuacox", "labels": ["bug", "enhancement", "cpp", "wg::platform-core"], "assignees": [], "review_requested": [], "comments": 2, "engagement": 1, "created_at": "2026-10-09T12:43:31Z", "updated_at": "2026-11-11T06:50:45Z", "last_activity": "2026-10-13T02:53:28Z", "days_stale": 32, "days_old": 36, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": false, "community_tier": "returning", "is_draft": false, "priority_score": 60, "suggested_reviewers": [{"login": "superm1", "score": 0.119, "why": "history on 2/5 files \u00b7 Platform Core lead \u00b7 load 8"}, {"login": "bitgamma", "score": 0.111, "why": "history on 5/5 files \u00b7 load 15"}]}, {"number": 3780, "title": "fix(server): start the eviction idle clock when inference completes", "url": "https://github.com/lemonade-sdk/lemonade/pull/3780", "author": "joshuacox", "labels": ["bug", "enhancement", "cpp", "wg::platform-core"], "assignees": [], "review_requested": [], "comments": 1, "engagement": 0, "created_at": "2026-10-09T12:43:28Z", "updated_at": "2026-11-11T06:50:48Z", "last_activity": "2026-10-09T12:43:28Z", "days_stale": 36, "days_old": 36, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": false, "community_tier": "returning", "is_draft": false, "priority_score": 55, "suggested_reviewers": [{"login": "superm1", "score": 0.129, "why": "history on 2/3 files \u00b7 Platform Core lead \u00b7 load 7"}, {"login": "bitgamma", "score": 0.086, "why": "history on 3/3 files \u00b7 load 14"}]}, {"number": 3755, "title": "fix(cloud): preserve max_context_window for cloud models during auto-\u2026", "url": "https://github.com/lemonade-sdk/lemonade/pull/3755", "author": "akulmehta", "labels": ["bug", "wg::cloud-hybrid"], "assignees": [], "review_requested": ["jeremyfowers"], "comments": 1, "engagement": 0, "created_at": "2026-10-04T21:04:11Z", "updated_at": "2026-11-11T06:51:00Z", "last_activity": "2026-10-04T21:26:49Z", "days_stale": 40, "days_old": 40, "wg": "Cloud Hybrid", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": false, "community_tier": "returning", "is_draft": false, "priority_score": 255, "suggested_reviewers": []}, {"number": 3729, "title": "feat(cloud): add telemetry logging, timings extraction, and task tracking for cloud requests", "url": "https://github.com/lemonade-sdk/lemonade/pull/3729", "author": "akulmehta", "labels": ["enhancement", "wg::cloud-hybrid"], "assignees": [], "review_requested": ["abn"], "comments": 3, "engagement": 1, "created_at": "2026-10-01T17:00:37Z", "updated_at": "2026-11-11T06:51:12Z", "last_activity": "2026-10-04T20:43:59Z", "days_stale": 40, "days_old": 44, "wg": "Cloud Hybrid", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": false, "community_tier": "returning", "is_draft": false, "priority_score": 15, "suggested_reviewers": []}, {"number": 3691, "title": "GUI3: Expose per-model registry updates", "url": "https://github.com/lemonade-sdk/lemonade/pull/3691", "author": "kpoineal", "labels": ["web ui", "wg::gui-app"], "assignees": [], "review_requested": [], "comments": 2, "engagement": 2, "created_at": "2026-09-28T20:08:59Z", "updated_at": "2026-11-11T06:51:19Z", "last_activity": "2026-10-08T00:20:37Z", "days_stale": 37, "days_old": 46, "wg": "GUI App", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 260, "suggested_reviewers": []}, {"number": 3679, "title": "fix(server): respect ROCR_VISIBLE_DEVICES in select_rocm_arch", "url": "https://github.com/lemonade-sdk/lemonade/pull/3679", "author": "mkadrlik", "labels": ["bug", "engine::llamacpp", "runtime::rocm", "wg::cross-vendor-support"], "assignees": [], "review_requested": ["Geramy"], "comments": 4, "engagement": 4, "created_at": "2026-09-26T23:24:50Z", "updated_at": "2026-11-11T06:52:02Z", "last_activity": "2026-11-07T19:34:21Z", "days_stale": 6, "days_old": 48, "wg": "Cross-Vendor Support", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": false, "community_tier": "returning", "is_draft": false, "priority_score": 470, "suggested_reviewers": []}, {"number": 3673, "title": "server: return 400 for repos with no supported model files", "url": "https://github.com/lemonade-sdk/lemonade/pull/3673", "author": "apollo-2006", "labels": ["bug", "engine::llamacpp", "area::api", "wg::platform-core"], "assignees": [], "review_requested": [], "comments": 2, "engagement": 0, "created_at": "2026-09-25T17:51:57Z", "updated_at": "2026-11-14T15:42:33Z", "last_activity": "2026-11-14T15:42:33Z", "days_stale": 0, "days_old": 50, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": false, "community_tier": "returning", "is_draft": false, "priority_score": 360, "suggested_reviewers": [{"login": "fl0rianr", "score": 0.151, "why": "history on 4/5 files \u00b7 load 5"}, {"login": "superm1", "score": 0.131, "why": "history on 1/5 files \u00b7 Platform Core lead \u00b7 load 6"}]}, {"number": 3664, "title": "Update release process docs", "url": "https://github.com/lemonade-sdk/lemonade/pull/3664", "author": "superm1", "labels": ["documentation"], "assignees": [], "review_requested": ["jeremyfowers"], "comments": 0, "engagement": 3, "created_at": "2026-09-23T20:42:16Z", "updated_at": "2026-09-25T14:20:29Z", "last_activity": "2026-09-25T14:20:22Z", "days_stale": 50, "days_old": 51, "wg": null, "wg_source": null, "wg_reason": null, "rfc_status": null, "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 250, "suggested_reviewers": []}, {"number": 3653, "title": "fix(web-app): clarify blocked-origin chat errors", "url": "https://github.com/lemonade-sdk/lemonade/pull/3653", "author": "abn", "labels": ["bug", "web ui", "wg::gui-app"], "assignees": [], "review_requested": ["kpoineal", "jeremyfowers"], "comments": 2, "engagement": 0, "created_at": "2026-09-22T22:32:21Z", "updated_at": "2026-11-11T06:51:28Z", "last_activity": "2026-09-23T14:07:53Z", "days_stale": 52, "days_old": 52, "wg": "GUI App", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 510, "suggested_reviewers": []}, {"number": 3651, "title": "Add Timing Block for whisper-server", "url": "https://github.com/lemonade-sdk/lemonade/pull/3651", "author": "iswaryaalex", "labels": ["enhancement", "engine::whispercpp"], "assignees": [], "review_requested": ["jeremyfowers"], "comments": 2, "engagement": 0, "created_at": "2026-09-22T19:06:55Z", "updated_at": "2026-09-22T20:49:31Z", "last_activity": "2026-09-22T20:49:31Z", "days_stale": 52, "days_old": 52, "wg": null, "wg_source": null, "wg_reason": null, "rfc_status": null, "is_maintainer": false, "community_tier": "active", "is_draft": false, "priority_score": -40, "suggested_reviewers": []}, {"number": 3650, "title": "ci: pilot devlab dispatch runners on non-required workloads", "url": "https://github.com/lemonade-sdk/lemonade/pull/3650", "author": "ramkrishna2910", "labels": ["area::ci", "wg::enterprise-grade"], "assignees": ["ramkrishna2910"], "review_requested": ["jeremyfowers"], "comments": 0, "engagement": 0, "created_at": "2026-09-22T18:39:37Z", "updated_at": "2026-11-11T06:52:10Z", "last_activity": "2026-09-22T18:45:41Z", "days_stale": 52, "days_old": 52, "wg": "Enterprise Grade", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 250, "suggested_reviewers": []}, {"number": 3624, "title": "fix(server): apply thinking controls on every API dialect", "url": "https://github.com/lemonade-sdk/lemonade/pull/3624", "author": "belzebub40k", "labels": ["enhancement", "engine::llamacpp", "area::api", "wg::platform-core"], "assignees": [], "review_requested": [], "comments": 5, "engagement": 0, "created_at": "2026-09-18T19:54:39Z", "updated_at": "2026-11-11T06:52:13Z", "last_activity": "2026-10-16T22:50:34Z", "days_stale": 28, "days_old": 56, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": false, "community_tier": "returning", "is_draft": false, "priority_score": -50, "suggested_reviewers": [{"login": "superm1", "score": 0.177, "why": "history on 4/7 files \u00b7 Platform Core lead \u00b7 load 5"}, {"login": "fl0rianr", "score": 0.168, "why": "history on 7/7 files \u00b7 load 4"}]}, {"number": 3620, "title": "fix(gui3): Sanitize additional backend CLI arguments", "url": "https://github.com/lemonade-sdk/lemonade/pull/3620", "author": "storm1er", "labels": ["bug", "wg::gui-app"], "assignees": [], "review_requested": ["kpoineal"], "comments": 3, "engagement": 2, "created_at": "2026-09-17T21:02:48Z", "updated_at": "2026-11-11T06:51:39Z", "last_activity": "2026-10-15T20:18:01Z", "days_stale": 29, "days_old": 57, "wg": "GUI App", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": false, "community_tier": "returning", "is_draft": false, "priority_score": 390, "suggested_reviewers": []}, {"number": 3611, "title": "Size the batch for embedding models by context", "url": "https://github.com/lemonade-sdk/lemonade/pull/3611", "author": "apollo-2006", "labels": ["enhancement", "engine::llamacpp", "wg::platform-core"], "assignees": [], "review_requested": ["pwilkin"], "comments": 3, "engagement": 1, "created_at": "2026-09-17T14:33:35Z", "updated_at": "2026-11-11T06:52:18Z", "last_activity": "2026-09-21T19:58:00Z", "days_stale": 53, "days_old": 58, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": false, "community_tier": "returning", "is_draft": false, "priority_score": -185, "suggested_reviewers": []}, {"number": 3595, "title": "feat(server): download model files over parallel ranged connections", "url": "https://github.com/lemonade-sdk/lemonade/pull/3595", "author": "jeremyfowers", "labels": ["enhancement", "cpp", "engine::llamacpp", "wg::platform-core"], "assignees": [], "review_requested": [], "comments": 7, "engagement": 7, "created_at": "2026-09-15T19:21:00Z", "updated_at": "2026-11-11T06:51:46Z", "last_activity": "2026-10-02T16:07:19Z", "days_stale": 43, "days_old": 59, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 285, "suggested_reviewers": []}, {"number": 3576, "title": "fix(server): report per-slot llama context", "url": "https://github.com/lemonade-sdk/lemonade/pull/3576", "author": "lambadalambda", "labels": ["bug", "engine::llamacpp", "wg::platform-core"], "assignees": [], "review_requested": [], "comments": 0, "engagement": 1, "created_at": "2026-09-14T14:11:59Z", "updated_at": "2026-11-11T06:52:53Z", "last_activity": "2026-10-01T16:27:48Z", "days_stale": 44, "days_old": 61, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": false, "community_tier": "returning", "is_draft": false, "priority_score": 50, "suggested_reviewers": [{"login": "superm1", "score": 0.17, "why": "history on 3/4 files \u00b7 Platform Core lead \u00b7 load 4"}, {"login": "meghsat", "score": 0.113, "why": "history on 4/4 files \u00b7 load 5"}]}, {"number": 3575, "title": "fix(server): preserve cloud context after load", "url": "https://github.com/lemonade-sdk/lemonade/pull/3575", "author": "lambadalambda", "labels": ["bug", "wg::cloud-hybrid"], "assignees": [], "review_requested": [], "comments": 1, "engagement": 1, "created_at": "2026-09-14T13:45:08Z", "updated_at": "2026-11-11T06:52:02Z", "last_activity": "2026-10-02T23:41:38Z", "days_stale": 42, "days_old": 61, "wg": "Cloud Hybrid", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": false, "community_tier": "returning", "is_draft": false, "priority_score": 55, "suggested_reviewers": [{"login": "fl0rianr", "score": 0.131, "why": "history on 3/3 files \u00b7 load 3"}]}, {"number": 3566, "title": "Fix cloud image generation routing", "url": "https://github.com/lemonade-sdk/lemonade/pull/3566", "author": "falabellamichael", "labels": ["enhancement", "area::api", "wg::cloud-hybrid"], "assignees": [], "review_requested": [], "comments": 3, "engagement": 2, "created_at": "2026-09-13T05:29:52Z", "updated_at": "2026-11-11T06:52:58Z", "last_activity": "2026-10-01T22:00:47Z", "days_stale": 43, "days_old": 62, "wg": "Cloud Hybrid", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": false, "community_tier": "returning", "is_draft": false, "priority_score": -185, "suggested_reviewers": [{"login": "bitgamma", "score": 0.076, "why": "history on 4/7 files \u00b7 load 13"}]}, {"number": 3518, "title": "fix(models): persist cost metadata through user-model registration", "url": "https://github.com/lemonade-sdk/lemonade/pull/3518", "author": "Bekhouche", "labels": ["documentation", "enhancement", "rfc:not-required", "wg::platform-core"], "assignees": ["Bekhouche"], "review_requested": ["bitgamma", "jeremyfowers", "SlawomirNowaczyk"], "comments": 2, "engagement": 1, "created_at": "2026-09-08T11:33:20Z", "updated_at": "2026-11-14T14:00:12Z", "last_activity": "2026-11-14T14:00:10Z", "days_stale": 0, "days_old": 67, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": "not-required", "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 760, "suggested_reviewers": []}, {"number": 3506, "title": "feat(api): video generation via stable-diffusion.cpp", "url": "https://github.com/lemonade-sdk/lemonade/pull/3506", "author": "Bekhouche", "labels": ["enhancement", "engine::sd", "area::api", "rfc:required", "wg::platform-core"], "assignees": ["Bekhouche"], "review_requested": ["pwilkin", "bitgamma", "jeremyfowers"], "comments": 11, "engagement": 3, "created_at": "2026-09-04T21:29:24Z", "updated_at": "2026-11-11T06:53:12Z", "last_activity": "2026-11-09T06:12:07Z", "days_stale": 5, "days_old": 70, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": "required", "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 1105, "suggested_reviewers": []}, {"number": 3501, "title": "feat(telemetry): emit the routing decision as span attributes", "url": "https://github.com/lemonade-sdk/lemonade/pull/3501", "author": "Bekhouche", "labels": ["enhancement", "cpp", "rfc:not-required", "wg::platform-core"], "assignees": ["Bekhouche"], "review_requested": ["abn"], "comments": 1, "engagement": 0, "created_at": "2026-09-03T17:26:29Z", "updated_at": "2026-11-11T06:52:32Z", "last_activity": "2026-11-04T06:36:10Z", "days_stale": 10, "days_old": 72, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": "not-required", "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 655, "suggested_reviewers": []}, {"number": 3500, "title": "fix(telemetry): validate otlp headers and replace on update", "url": "https://github.com/lemonade-sdk/lemonade/pull/3500", "author": "abn", "labels": ["enhancement", "cpp", "wg::platform-core"], "assignees": [], "review_requested": ["jeremyfowers"], "comments": 5, "engagement": 9, "created_at": "2026-09-03T15:57:12Z", "updated_at": "2026-11-11T06:52:36Z", "last_activity": "2026-09-14T21:11:35Z", "days_stale": 60, "days_old": 72, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 275, "suggested_reviewers": []}, {"number": 3497, "title": "feat(router): reject previous_response_id on a router collection", "url": "https://github.com/lemonade-sdk/lemonade/pull/3497", "author": "Bekhouche", "labels": ["enhancement", "area::api", "rfc:not-required", "wg::platform-core"], "assignees": ["Bekhouche"], "review_requested": ["ramkrishna2910", "SlawomirNowaczyk"], "comments": 2, "engagement": 2, "created_at": "2026-09-03T10:09:27Z", "updated_at": "2026-11-14T14:12:47Z", "last_activity": "2026-11-14T14:12:44Z", "days_stale": 0, "days_old": 72, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": "not-required", "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 760, "suggested_reviewers": []}, {"number": 3445, "title": "feat(app): router collection panel and add-model flow", "url": "https://github.com/lemonade-sdk/lemonade/pull/3445", "author": "ao-batouche", "labels": ["enhancement", "app", "rfc:required", "wg::gui-app"], "assignees": [], "review_requested": [], "comments": 1, "engagement": 1, "created_at": "2026-08-31T13:41:00Z", "updated_at": "2026-11-11T06:53:00Z", "last_activity": "2026-10-07T04:04:45Z", "days_stale": 38, "days_old": 75, "wg": "GUI App", "wg_source": "label", "wg_reason": null, "rfc_status": "required", "is_maintainer": false, "community_tier": "returning", "is_draft": false, "priority_score": 205, "suggested_reviewers": []}, {"number": 3442, "title": "Prompt Validator: accept real request body", "url": "https://github.com/lemonade-sdk/lemonade/pull/3442", "author": "QuMuzafferEge", "labels": ["enhancement", "area::api"], "assignees": [], "review_requested": ["ramkrishna2910", "SlawomirNowaczyk"], "comments": 7, "engagement": 3, "created_at": "2026-08-31T07:39:15Z", "updated_at": "2026-11-12T08:14:20Z", "last_activity": "2026-11-12T08:14:11Z", "days_stale": 2, "days_old": 75, "wg": null, "wg_source": null, "wg_reason": null, "rfc_status": null, "is_maintainer": false, "community_tier": "returning", "is_draft": false, "priority_score": 335, "suggested_reviewers": []}, {"number": 3441, "title": "fix(ryzenai): accept OpenAI content-part arrays in chat messages", "url": "https://github.com/lemonade-sdk/lemonade/pull/3441", "author": "anditherobot", "labels": ["bug", "engine::ryzenai", "area::api", "rfc:not-required"], "assignees": [], "review_requested": [], "comments": 1, "engagement": 1, "created_at": "2026-08-31T04:55:17Z", "updated_at": "2026-11-11T06:53:59Z", "last_activity": "2026-09-09T15:09:15Z", "days_stale": 66, "days_old": 75, "wg": null, "wg_source": null, "wg_reason": null, "rfc_status": "not-required", "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 305, "suggested_reviewers": [{"login": "jeremyfowers", "score": 0.055, "why": "history on 10/10 files \u00b7 load 51"}]}, {"number": 3440, "title": "fix(streaming): replace null delta.role with \\\"assistant\\\" in chat completion chunks", "url": "https://github.com/lemonade-sdk/lemonade/pull/3440", "author": "anditherobot", "labels": ["bug", "enhancement", "area::api", "rfc:not-required", "wg::platform-core"], "assignees": [], "review_requested": [], "comments": 4, "engagement": 2, "created_at": "2026-08-31T04:55:13Z", "updated_at": "2026-11-11T06:53:04Z", "last_activity": "2026-09-11T15:27:12Z", "days_stale": 64, "days_old": 75, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": "not-required", "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 320, "suggested_reviewers": [{"login": "superm1", "score": 0.164, "why": "history on 3/5 files \u00b7 Platform Core lead \u00b7 load 3"}]}, {"number": 3437, "title": "fix(mcp): resolve model aliases in tool calls", "url": "https://github.com/lemonade-sdk/lemonade/pull/3437", "author": "boecks", "labels": ["bug", "enhancement", "engine::llamacpp", "rfc:not-required", "wg::platform-core"], "assignees": [], "review_requested": ["abn"], "comments": 1, "engagement": 2, "created_at": "2026-08-30T15:05:43Z", "updated_at": "2026-11-11T06:53:08Z", "last_activity": "2026-09-09T16:43:17Z", "days_stale": 66, "days_old": 76, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": "not-required", "is_maintainer": false, "community_tier": "returning", "is_draft": false, "priority_score": 55, "suggested_reviewers": []}, {"number": 3436, "title": "feat(metrics): relate model aliases to their target in /metrics", "url": "https://github.com/lemonade-sdk/lemonade/pull/3436", "author": "boecks", "labels": ["enhancement", "area::api", "rfc:not-required"], "assignees": [], "review_requested": ["abn"], "comments": 4, "engagement": 2, "created_at": "2026-08-30T14:48:17Z", "updated_at": "2026-09-09T15:16:32Z", "last_activity": "2026-09-09T15:16:32Z", "days_stale": 66, "days_old": 76, "wg": null, "wg_source": null, "wg_reason": null, "rfc_status": "not-required", "is_maintainer": false, "community_tier": "returning", "is_draft": false, "priority_score": -180, "suggested_reviewers": []}, {"number": 3435, "title": "fix(anthropic): resolve model aliases on /v1/messages and the Ollama endpoints", "url": "https://github.com/lemonade-sdk/lemonade/pull/3435", "author": "boecks", "labels": ["bug", "area::api", "rfc:not-required"], "assignees": [], "review_requested": ["abn"], "comments": 9, "engagement": 7, "created_at": "2026-08-30T14:26:16Z", "updated_at": "2026-10-17T15:01:27Z", "last_activity": "2026-10-17T15:01:27Z", "days_stale": 28, "days_old": 76, "wg": null, "wg_source": null, "wg_reason": null, "rfc_status": "not-required", "is_maintainer": false, "community_tier": "returning", "is_draft": false, "priority_score": 420, "suggested_reviewers": []}, {"number": 3380, "title": "Fix compact chat model selector and modality display", "url": "https://github.com/lemonade-sdk/lemonade/pull/3380", "author": "falabellamichael", "labels": ["bug", "web ui"], "assignees": [], "review_requested": ["kpoineal"], "comments": 3, "engagement": 0, "created_at": "2026-08-26T20:38:35Z", "updated_at": "2026-09-09T15:50:17Z", "last_activity": "2026-08-31T06:01:23Z", "days_stale": 75, "days_old": 79, "wg": null, "wg_source": null, "wg_reason": null, "rfc_status": null, "is_maintainer": false, "community_tier": "returning", "is_draft": false, "priority_score": 65, "suggested_reviewers": []}, {"number": 3373, "title": "MCP: select image-edit capable models for edit_image", "url": "https://github.com/lemonade-sdk/lemonade/pull/3373", "author": "fl0rianr", "labels": ["enhancement", "cpp", "wg::platform-core"], "assignees": [], "review_requested": ["siavashdev"], "comments": 0, "engagement": 0, "created_at": "2026-08-26T18:41:25Z", "updated_at": "2026-11-11T06:53:29Z", "last_activity": "2026-08-26T20:02:08Z", "days_stale": 79, "days_old": 79, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 250, "suggested_reviewers": []}, {"number": 3372, "title": "MCP: add prompt-to-3D orchestration", "url": "https://github.com/lemonade-sdk/lemonade/pull/3372", "author": "fl0rianr", "labels": ["enhancement", "wg::platform-core"], "assignees": [], "review_requested": ["siavashdev"], "comments": 0, "engagement": 0, "created_at": "2026-08-26T18:17:48Z", "updated_at": "2026-11-11T06:53:32Z", "last_activity": "2026-08-26T18:17:48Z", "days_stale": 80, "days_old": 80, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 250, "suggested_reviewers": []}, {"number": 3363, "title": "fix(gui3): remove idle app-controls background", "url": "https://github.com/lemonade-sdk/lemonade/pull/3363", "author": "falabellamichael", "labels": ["app", "wg::gui-app"], "assignees": [], "review_requested": ["kpoineal"], "comments": 3, "engagement": 1, "created_at": "2026-08-26T12:41:33Z", "updated_at": "2026-11-11T06:53:40Z", "last_activity": "2026-08-26T21:03:35Z", "days_stale": 79, "days_old": 80, "wg": "GUI App", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": false, "community_tier": "returning", "is_draft": false, "priority_score": -185, "suggested_reviewers": []}, {"number": 3362, "title": "test(utils): add shared lemond_server test fixture and deduplicate suites", "url": "https://github.com/lemonade-sdk/lemonade/pull/3362", "author": "abn", "labels": ["enhancement", "area::ci", "rfc:required", "wg::enterprise-grade"], "assignees": [], "review_requested": ["ramkrishna2910"], "comments": 4, "engagement": 3, "created_at": "2026-08-26T11:51:01Z", "updated_at": "2026-11-11T06:54:07Z", "last_activity": "2026-09-12T01:49:27Z", "days_stale": 63, "days_old": 80, "wg": "Enterprise Grade", "wg_source": "label", "wg_reason": null, "rfc_status": "required", "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 670, "suggested_reviewers": []}, {"number": 3361, "title": "fix: recover repo name for extra models kept in HF-cache layout", "url": "https://github.com/lemonade-sdk/lemonade/pull/3361", "author": "Davedave001", "labels": ["bug", "enhancement", "cpp", "rfc:not-required", "wg::platform-core"], "assignees": [], "review_requested": [], "comments": 2, "engagement": 3, "created_at": "2026-08-26T08:31:17Z", "updated_at": "2026-11-11T06:53:44Z", "last_activity": "2026-09-09T15:55:11Z", "days_stale": 66, "days_old": 80, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": "not-required", "is_maintainer": false, "community_tier": "returning", "is_draft": false, "priority_score": -140, "suggested_reviewers": []}, {"number": 3360, "title": "Fail early on inverted chars band", "url": "https://github.com/lemonade-sdk/lemonade/pull/3360", "author": "SlawomirNowaczyk", "labels": ["enhancement", "rfc:not-required"], "assignees": [], "review_requested": ["eddierichter-amd"], "comments": 0, "engagement": 0, "created_at": "2026-08-26T08:22:28Z", "updated_at": "2026-09-09T15:55:34Z", "last_activity": "2026-08-26T08:22:28Z", "days_stale": 80, "days_old": 80, "wg": null, "wg_source": null, "wg_reason": null, "rfc_status": "not-required", "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 250, "suggested_reviewers": []}, {"number": 3350, "title": "MCP: expose remote model search and pull variant discovery", "url": "https://github.com/lemonade-sdk/lemonade/pull/3350", "author": "fl0rianr", "labels": ["enhancement", "area::api", "rfc:required", "wg::cloud-hybrid"], "assignees": [], "review_requested": ["ramkrishna2910", "jeremyfowers"], "comments": 2, "engagement": 3, "created_at": "2026-08-25T17:11:20Z", "updated_at": "2026-11-11T06:54:14Z", "last_activity": "2026-08-26T17:53:02Z", "days_stale": 80, "days_old": 81, "wg": "Cloud Hybrid", "wg_source": "label", "wg_reason": null, "rfc_status": "required", "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 660, "suggested_reviewers": []}, {"number": 3346, "title": "server: make registered model discovery canonical and queryable", "url": "https://github.com/lemonade-sdk/lemonade/pull/3346", "author": "fl0rianr", "labels": ["enhancement", "area::api", "rfc:required", "wg::platform-core"], "assignees": [], "review_requested": ["jeremyfowers"], "comments": 0, "engagement": 1, "created_at": "2026-08-25T16:31:50Z", "updated_at": "2026-11-11T06:54:17Z", "last_activity": "2026-08-26T16:37:24Z", "days_stale": 80, "days_old": 81, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": "required", "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 650, "suggested_reviewers": []}, {"number": 3339, "title": "fix(router): filter candidates by context window at dispatch", "url": "https://github.com/lemonade-sdk/lemonade/pull/3339", "author": "ao-batouche", "labels": ["enhancement", "area::api", "rfc:not-required", "wg::platform-core"], "assignees": ["ao-batouche"], "review_requested": ["ramkrishna2910"], "comments": 6, "engagement": 5, "created_at": "2026-08-25T08:51:54Z", "updated_at": "2026-11-11T06:54:49Z", "last_activity": "2026-10-07T23:43:59Z", "days_stale": 37, "days_old": 81, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": "not-required", "is_maintainer": false, "community_tier": "returning", "is_draft": false, "priority_score": 30, "suggested_reviewers": []}, {"number": 3319, "title": "MCP: expose canonical Lemonade capability hub", "url": "https://github.com/lemonade-sdk/lemonade/pull/3319", "author": "fl0rianr", "labels": ["enhancement", "area::api", "rfc:required", "wg::platform-core"], "assignees": [], "review_requested": ["ramkrishna2910", "siavashdev"], "comments": 7, "engagement": 9, "created_at": "2026-08-24T13:28:44Z", "updated_at": "2026-11-11T06:54:00Z", "last_activity": "2026-09-09T18:40:00Z", "days_stale": 65, "days_old": 82, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": "required", "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 685, "suggested_reviewers": []}, {"number": 3314, "title": "Conversation momentum implementation", "url": "https://github.com/lemonade-sdk/lemonade/pull/3314", "author": "QuMuzafferEge", "labels": ["rfc:not-required"], "assignees": [], "review_requested": ["eddierichter-amd"], "comments": 2, "engagement": 1, "created_at": "2026-08-24T08:22:53Z", "updated_at": "2026-10-08T07:28:29Z", "last_activity": "2026-10-08T07:19:21Z", "days_stale": 37, "days_old": 82, "wg": null, "wg_source": null, "wg_reason": null, "rfc_status": "not-required", "is_maintainer": false, "community_tier": "returning", "is_draft": false, "priority_score": 10, "suggested_reviewers": []}, {"number": 3310, "title": "fix(system_info): safely extract numeric compute_capability in GPU detection", "url": "https://github.com/lemonade-sdk/lemonade/pull/3310", "author": "abn", "labels": ["bug", "cpp", "engine::llamacpp", "rfc:not-required", "wg::platform-core"], "assignees": [], "review_requested": ["kenvandine"], "comments": 2, "engagement": 2, "created_at": "2026-08-23T12:55:22Z", "updated_at": "2026-11-11T06:54:06Z", "last_activity": "2026-09-09T17:23:10Z", "days_stale": 66, "days_old": 83, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": "not-required", "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 510, "suggested_reviewers": []}, {"number": 3295, "title": "feat(packaging): integrate flatpak packaging and dual-channel distribution", "url": "https://github.com/lemonade-sdk/lemonade/pull/3295", "author": "abn", "labels": ["enhancement", "area::installer", "wg::cross-vendor-support"], "assignees": [], "review_requested": ["jeremyfowers", "kpoineal"], "comments": 8, "engagement": 7, "created_at": "2026-08-22T11:12:24Z", "updated_at": "2026-11-11T06:54:54Z", "last_activity": "2026-11-08T14:52:33Z", "days_stale": 6, "days_old": 84, "wg": "Cross-Vendor Support", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 690, "suggested_reviewers": []}, {"number": 3244, "title": "fix(server): avoid repeat hash scans for verified model files", "url": "https://github.com/lemonade-sdk/lemonade/pull/3244", "author": "fl0rianr", "labels": ["enhancement", "rfc:not-required", "wg::platform-core"], "assignees": [], "review_requested": ["Geramy"], "comments": 1, "engagement": 1, "created_at": "2026-08-19T19:29:23Z", "updated_at": "2026-11-11T06:54:46Z", "last_activity": "2026-08-20T13:58:40Z", "days_stale": 86, "days_old": 86, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": "not-required", "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 255, "suggested_reviewers": []}, {"number": 3169, "title": "feat(routing): add min_turns/max_turns and metadata gte/lte comparators", "url": "https://github.com/lemonade-sdk/lemonade/pull/3169", "author": "Bekhouche", "labels": ["enhancement", "wg::cloud-hybrid"], "assignees": ["Bekhouche"], "review_requested": ["ramkrishna2910"], "comments": 6, "engagement": 6, "created_at": "2026-08-16T11:47:00Z", "updated_at": "2026-11-11T06:55:00Z", "last_activity": "2026-11-04T06:51:55Z", "days_stale": 10, "days_old": 90, "wg": "Cloud Hybrid", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 680, "suggested_reviewers": []}, {"number": 3130, "title": "test(gui): detect em dash regression, fix UI test", "url": "https://github.com/lemonade-sdk/lemonade/pull/3130", "author": "fl0rianr", "labels": ["enhancement", "app", "area::ci", "wg::gui-app"], "assignees": [], "review_requested": ["jeremyfowers", "ramkrishna2910", "kpoineal"], "comments": 3, "engagement": 1, "created_at": "2026-08-14T09:28:33Z", "updated_at": "2026-11-11T06:55:13Z", "last_activity": "2026-10-18T21:13:56Z", "days_stale": 26, "days_old": 92, "wg": "GUI App", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 590, "suggested_reviewers": []}, {"number": 3112, "title": "lemonade import \u003cfile.json\u003e: --dry-run policy validation, --alias; pull redirects file args to import", "url": "https://github.com/lemonade-sdk/lemonade/pull/3112", "author": "ramkrishna2910", "labels": ["enhancement", "area::cli", "rfc:required", "wg::platform-core"], "assignees": ["ramkrishna2910"], "review_requested": [], "comments": 6, "engagement": 8, "created_at": "2026-08-13T05:38:33Z", "updated_at": "2026-11-11T06:54:58Z", "last_activity": "2026-08-26T06:30:53Z", "days_stale": 80, "days_old": 93, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": "required", "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 480, "suggested_reviewers": []}, {"number": 3101, "title": "Add route_only request option: routing decision without inference (dry-route)", "url": "https://github.com/lemonade-sdk/lemonade/pull/3101", "author": "ramkrishna2910", "labels": ["enhancement", "area::api", "rfc:not-required", "wg::platform-core"], "assignees": ["ramkrishna2910"], "review_requested": ["meghsat", "eddierichter-amd"], "comments": 7, "engagement": 8, "created_at": "2026-08-12T19:31:01Z", "updated_at": "2026-11-11T06:55:32Z", "last_activity": "2026-08-27T08:49:43Z", "days_stale": 79, "days_old": 93, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": "not-required", "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 285, "suggested_reviewers": []}, {"number": 3100, "title": "feat(routing): add cost_select deterministic cost-based router", "url": "https://github.com/lemonade-sdk/lemonade/pull/3100", "author": "Bekhouche", "labels": ["enhancement", "rfc:not-required", "wg::cloud-hybrid"], "assignees": ["Bekhouche"], "review_requested": ["ramkrishna2910", "eddierichter-amd"], "comments": 12, "engagement": 7, "created_at": "2026-08-12T19:27:45Z", "updated_at": "2026-11-11T06:55:36Z", "last_activity": "2026-11-07T11:50:46Z", "days_stale": 7, "days_old": 93, "wg": "Cloud Hybrid", "wg_source": "label", "wg_reason": null, "rfc_status": "not-required", "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 710, "suggested_reviewers": []}, {"number": 3042, "title": "GUI3 fix: backend hide technical details", "url": "https://github.com/lemonade-sdk/lemonade/pull/3042", "author": "fl0rianr", "labels": ["enhancement", "app", "wg::gui-app"], "assignees": [], "review_requested": ["kpoineal"], "comments": 5, "engagement": 4, "created_at": "2026-08-10T22:33:06Z", "updated_at": "2026-11-11T06:56:07Z", "last_activity": "2026-09-09T18:14:07Z", "days_stale": 66, "days_old": 95, "wg": "GUI App", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 275, "suggested_reviewers": []}, {"number": 2969, "title": "feat(telemetry): default to unlimited attribute length with size-bounded queue", "url": "https://github.com/lemonade-sdk/lemonade/pull/2969", "author": "abn", "labels": ["enhancement", "rfc:required"], "assignees": [], "review_requested": [], "comments": 7, "engagement": 7, "created_at": "2026-08-07T23:55:35Z", "updated_at": "2026-09-09T17:51:39Z", "last_activity": "2026-08-29T23:50:56Z", "days_stale": 76, "days_old": 98, "wg": null, "wg_source": null, "wg_reason": null, "rfc_status": "required", "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 485, "suggested_reviewers": []}, {"number": 2892, "title": "ci: wire multi-checkpoint integration smoke into CI", "url": "https://github.com/lemonade-sdk/lemonade/pull/2892", "author": "fl0rianr", "labels": ["bug", "area::ci", "rfc:not-required", "wg::enterprise-grade"], "assignees": [], "review_requested": [], "comments": 2, "engagement": 1, "created_at": "2026-08-04T14:11:30Z", "updated_at": "2026-11-11T06:55:01Z", "last_activity": "2026-09-09T20:11:32Z", "days_stale": 65, "days_old": 102, "wg": "Enterprise Grade", "wg_source": "label", "wg_reason": null, "rfc_status": "not-required", "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 310, "suggested_reviewers": [{"login": "superm1", "score": 0.162, "why": "history on 1/2 files \u00b7 load 2"}]}, {"number": 2889, "title": "ci: skip expensive jobs for small docs-only PRs", "url": "https://github.com/lemonade-sdk/lemonade/pull/2889", "author": "fl0rianr", "labels": ["enhancement", "area::ci", "wg::enterprise-grade"], "assignees": [], "review_requested": ["jeremyfowers"], "comments": 0, "engagement": 0, "created_at": "2026-08-04T10:03:15Z", "updated_at": "2026-11-11T06:55:08Z", "last_activity": "2026-08-18T13:42:17Z", "days_stale": 88, "days_old": 102, "wg": "Enterprise Grade", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 250, "suggested_reviewers": []}, {"number": 2842, "title": "[Stable Diffusion] Enable image upscaling for external calls", "url": "https://github.com/lemonade-sdk/lemonade/pull/2842", "author": "NineBallo", "labels": ["enhancement", "engine::sd", "area::api"], "assignees": [], "review_requested": ["ramkrishna2910"], "comments": 31, "engagement": 7, "created_at": "2026-07-29T03:47:17Z", "updated_at": "2026-11-12T18:48:09Z", "last_activity": "2026-11-12T18:48:09Z", "days_stale": 1, "days_old": 108, "wg": null, "wg_source": null, "wg_reason": null, "rfc_status": null, "is_maintainer": false, "community_tier": "returning", "is_draft": false, "priority_score": 375, "suggested_reviewers": []}, {"number": 2838, "title": "feat: bump OpenMoss engine to 0.2.0 / GUI side", "url": "https://github.com/lemonade-sdk/lemonade/pull/2838", "author": "pwilkin", "labels": ["enhancement", "wg::gui-app"], "assignees": [], "review_requested": ["jeremyfowers"], "comments": 6, "engagement": 6, "created_at": "2026-07-28T21:17:53Z", "updated_at": "2026-11-11T06:56:56Z", "last_activity": "2026-09-30T19:40:30Z", "days_stale": 44, "days_old": 108, "wg": "GUI App", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 480, "suggested_reviewers": []}, {"number": 2832, "title": "Surface full vLLM GPU support scope (RDNA3, RDNA4 incl. RX 9070 XT)", "url": "https://github.com/lemonade-sdk/lemonade/pull/2832", "author": "Bodanel", "labels": ["documentation", "engine::vllm", "runtime::rocm", "wg::cross-vendor-support"], "assignees": [], "review_requested": ["sawansri", "sreeram-11"], "comments": 1, "engagement": 1, "created_at": "2026-07-28T11:34:52Z", "updated_at": "2026-11-11T06:55:14Z", "last_activity": "2026-10-01T07:37:32Z", "days_stale": 44, "days_old": 109, "wg": "Cross-Vendor Support", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": false, "community_tier": "returning", "is_draft": false, "priority_score": 5, "suggested_reviewers": []}, {"number": 2766, "title": "feat: add jobs for all operations besides chat completion to the job engine", "url": "https://github.com/lemonade-sdk/lemonade/pull/2766", "author": "pwilkin", "labels": ["enhancement", "wg::platform-core"], "assignees": [], "review_requested": [], "comments": 1, "engagement": 2, "created_at": "2026-07-20T19:12:16Z", "updated_at": "2026-11-11T06:57:03Z", "last_activity": "2026-11-08T22:47:15Z", "days_stale": 5, "days_old": 116, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 455, "suggested_reviewers": []}, {"number": 2765, "title": "feat: add smart thinking v0", "url": "https://github.com/lemonade-sdk/lemonade/pull/2765", "author": "fl0rianr", "labels": ["enhancement", "area::api", "wg::platform-core"], "assignees": [], "review_requested": [], "comments": 0, "engagement": 1, "created_at": "2026-07-20T17:53:21Z", "updated_at": "2026-11-11T06:55:43Z", "last_activity": "2026-07-27T15:22:05Z", "days_stale": 110, "days_old": 117, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 50, "suggested_reviewers": []}, {"number": 2714, "title": "fix(models): compute aggregate max_context_window for collection.router/omni", "url": "https://github.com/lemonade-sdk/lemonade/pull/2714", "author": "kenvandine", "labels": ["bug", "enhancement", "cpp", "wg::platform-core"], "assignees": [], "review_requested": ["ramkrishna2910"], "comments": 3, "engagement": 1, "created_at": "2026-07-15T09:16:04Z", "updated_at": "2026-11-11T06:57:30Z", "last_activity": "2026-08-28T18:09:46Z", "days_stale": 78, "days_old": 122, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 515, "suggested_reviewers": []}, {"number": 2675, "title": "Feat/vte rdna3 backend", "url": "https://github.com/lemonade-sdk/lemonade/pull/2675", "author": "kyuubyN", "labels": ["enhancement", "engine::llamacpp", "runtime::rocm", "wg::cross-vendor-support"], "assignees": [], "review_requested": ["fl0rianr"], "comments": 8, "engagement": 6, "created_at": "2026-07-12T08:02:42Z", "updated_at": "2026-11-11T06:55:47Z", "last_activity": "2026-07-17T17:55:26Z", "days_stale": 120, "days_old": 125, "wg": "Cross-Vendor Support", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": false, "community_tier": "returning", "is_draft": false, "priority_score": -160, "suggested_reviewers": []}, {"number": 2669, "title": "Bundle the Lemonade Nexus sidecar", "url": "https://github.com/lemonade-sdk/lemonade/pull/2669", "author": "fl0rianr", "labels": ["enhancement", "area::installer", "wg::platform-core"], "assignees": [], "review_requested": ["Geramy"], "comments": 3, "engagement": 4, "created_at": "2026-07-11T11:56:39Z", "updated_at": "2026-11-11T06:55:51Z", "last_activity": "2026-08-28T16:20:57Z", "days_stale": 78, "days_old": 126, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 265, "suggested_reviewers": []}, {"number": 2616, "title": "fix(macos): drop dangerous Hardened Runtime entitlements", "url": "https://github.com/lemonade-sdk/lemonade/pull/2616", "author": "superm1", "labels": ["bug", "area::installer", "wg::platform-core"], "assignees": [], "review_requested": ["Geramy"], "comments": 8, "engagement": 5, "created_at": "2026-07-09T15:51:13Z", "updated_at": "2026-11-11T06:55:56Z", "last_activity": "2026-09-23T16:55:36Z", "days_stale": 52, "days_old": 128, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 540, "suggested_reviewers": []}, {"number": 2439, "title": "feat: add ROCm support for Radeon 780M/760M/740M (gfx110X) on Windows", "url": "https://github.com/lemonade-sdk/lemonade/pull/2439", "author": "likemusic", "labels": ["enhancement", "engine::llamacpp", "runtime::rocm", "wg::cross-vendor-support"], "assignees": [], "review_requested": [], "comments": 1, "engagement": 2, "created_at": "2026-06-26T15:58:53Z", "updated_at": "2026-11-11T06:56:06Z", "last_activity": "2026-11-04T01:17:15Z", "days_stale": 10, "days_old": 141, "wg": "Cross-Vendor Support", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": false, "community_tier": "returning", "is_draft": false, "priority_score": 5, "suggested_reviewers": []}, {"number": 2438, "title": "feat(cli): introduce model filtering for the list command", "url": "https://github.com/lemonade-sdk/lemonade/pull/2438", "author": "abn", "labels": ["enhancement", "area::cli", "wg::platform-core"], "assignees": [], "review_requested": [], "comments": 0, "engagement": 2, "created_at": "2026-06-26T15:43:02Z", "updated_at": "2026-11-11T06:56:11Z", "last_activity": "2026-08-23T14:58:00Z", "days_stale": 83, "days_old": 141, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 50, "suggested_reviewers": [{"login": "superm1", "score": 0.204, "why": "history on 4/6 files \u00b7 Platform Core lead \u00b7 load 1"}, {"login": "bitgamma", "score": 0.138, "why": "history on 5/6 files \u00b7 CODEOWNER of 2/6 files \u00b7 load 12"}]}, {"number": 2310, "title": "feat(server): persist model pin status and auto-load pinned models on boot", "url": "https://github.com/lemonade-sdk/lemonade/pull/2310", "author": "abn", "labels": ["enhancement", "cpp", "wg::platform-core"], "assignees": [], "review_requested": ["kenvandine"], "comments": 9, "engagement": 2, "created_at": "2026-06-18T23:49:13Z", "updated_at": "2026-11-11T06:58:28Z", "last_activity": "2026-08-27T10:06:30Z", "days_stale": 79, "days_old": 148, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 295, "suggested_reviewers": []}, {"number": 2307, "title": "Feature - Default model fallback", "url": "https://github.com/lemonade-sdk/lemonade/pull/2307", "author": "VultureZZ", "labels": ["enhancement", "area::api", "wg::platform-core"], "assignees": [], "review_requested": ["Geramy"], "comments": 1, "engagement": 1, "created_at": "2026-06-18T14:28:31Z", "updated_at": "2026-11-11T06:56:45Z", "last_activity": "2026-08-17T00:04:05Z", "days_stale": 89, "days_old": 149, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": false, "community_tier": "returning", "is_draft": false, "priority_score": -195, "suggested_reviewers": []}, {"number": 2305, "title": "Fix - Model Download Race Condition", "url": "https://github.com/lemonade-sdk/lemonade/pull/2305", "author": "VultureZZ", "labels": ["bug", "wg::platform-core"], "assignees": [], "review_requested": [], "comments": 0, "engagement": 2, "created_at": "2026-06-18T14:24:27Z", "updated_at": "2026-11-11T06:58:31Z", "last_activity": "2026-06-27T08:43:50Z", "days_stale": 140, "days_old": 149, "wg": "Platform Core", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": false, "community_tier": "returning", "is_draft": false, "priority_score": -150, "suggested_reviewers": []}, {"number": 2187, "title": "Anthropic Messages API implementation improvements", "url": "https://github.com/lemonade-sdk/lemonade/pull/2187", "author": "sawansri", "labels": [], "assignees": [], "review_requested": [], "comments": 4, "engagement": 0, "created_at": "2026-06-11T05:45:03Z", "updated_at": "2026-07-14T17:49:07Z", "last_activity": "2026-07-14T17:49:07Z", "days_stale": 123, "days_old": 156, "wg": null, "wg_source": null, "wg_reason": null, "rfc_status": null, "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 70, "suggested_reviewers": [{"login": "SlawomirNowaczyk", "score": 0.123, "why": "history on 8/12 files \u00b7 load 3"}]}, {"number": 2141, "title": "test: check if code is API breaking", "url": "https://github.com/lemonade-sdk/lemonade/pull/2141", "author": "fl0rianr", "labels": ["enhancement", "area::api", "wg::enterprise-grade"], "assignees": [], "review_requested": ["jeremyfowers"], "comments": 3, "engagement": 2, "created_at": "2026-06-08T18:00:41Z", "updated_at": "2026-11-11T06:56:51Z", "last_activity": "2026-06-25T23:36:02Z", "days_stale": 141, "days_old": 159, "wg": "Enterprise Grade", "wg_source": "label", "wg_reason": null, "rfc_status": null, "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 265, "suggested_reviewers": []}, {"number": 2055, "title": "docs: fill coverage gaps across API reference, CLI, Omni, and app dev guide", "url": "https://github.com/lemonade-sdk/lemonade/pull/2055", "author": "kenvandine", "labels": ["documentation"], "assignees": [], "review_requested": [], "comments": 4, "engagement": 27, "created_at": "2026-06-01T01:45:24Z", "updated_at": "2026-06-23T13:45:17Z", "last_activity": "2026-06-23T13:45:16Z", "days_stale": 144, "days_old": 166, "wg": null, "wg_source": null, "wg_reason": null, "rfc_status": null, "is_maintainer": true, "community_tier": null, "is_draft": false, "priority_score": 70, "suggested_reviewers": []}, {"number": 1951, "title": "when agent cli is not found print env vars and launch cmd", "url": "https://github.com/lemonade-sdk/lemonade/pull/1951", "author": "anishp55", "labels": ["enhancement", "area::cli"], "assignees": [], "review_requested": [], "comments": 3, "engagement": 3, "created_at": "2026-05-19T01:06:06Z", "updated_at": "2026-08-06T15:02:09Z", "last_activity": "2026-08-06T15:02:09Z", "days_stale": 100, "days_old": 179, "wg": null, "wg_source": null, "wg_reason": null, "rfc_status": null, "is_maintainer": false, "community_tier": "returning", "is_draft": false, "priority_score": -385, "suggested_reviewers": []}];
+const ALL_WGS = ["Auto-Tune", "Cross-Vendor Support", "Cloud Hybrid", "Remote Use", "GUI App", "Enterprise Grade", "Platform Core"];
+const FOCUS_DATA = {"Platform Core": [{"number": 4144, "title": "Clean up old TheRock installs across tarball and wheel dirs", "url": "https://github.com/lemonade-sdk/lemonade/pull/4144", "author": "superm1", "score": 1160, "days_stale": 0, "days_old": 2, "wg": "Platform Core", "labels": ["area::installer", "wg::platform-core"], "assignees": [], "community_tier": null, "is_maintainer": true, "rfc_status": null, "review_requested": ["sreeram-11"]}, {"number": 4167, "title": "docs: add missing persistent volumes to Docker troubleshooting example", "url": "https://github.com/lemonade-sdk/lemonade/pull/4167", "author": "siavashdev", "score": 1155, "days_stale": -1, "days_old": 0, "wg": "Platform Core", "labels": ["documentation", "wg::platform-core"], "assignees": [], "community_tier": null, "is_maintainer": true, "rfc_status": null, "review_requested": ["jeremyfowers"]}, {"number": 4089, "title": "fix(server): preserve GPU discovery order instead of sorting by VRAM", "url": "https://github.com/lemonade-sdk/lemonade/pull/4089", "author": "fl0rianr", "score": 1105, "days_stale": 7, "days_old": 7, "wg": "Platform Core", "labels": ["bug", "wg::platform-core"], "assignees": [], "community_tier": null, "is_maintainer": true, "rfc_status": null, "review_requested": []}], "GUI App": [{"number": 4138, "title": "Fix TheNoise custom image model registration", "url": "https://github.com/lemonade-sdk/lemonade/pull/4138", "author": "fl0rianr", "score": 1410, "days_stale": 1, "days_old": 2, "wg": "GUI App", "labels": ["bug", "enhancement", "engine::sd", "wg::gui-app"], "assignees": [], "community_tier": null, "is_maintainer": true, "rfc_status": null, "review_requested": ["kpoineal", "jeremyfowers"]}, {"number": 4135, "title": "fix(gui): Updating the ModelScope assets to GUI3", "url": "https://github.com/lemonade-sdk/lemonade/pull/4135", "author": "meghsat", "score": 1205, "days_stale": 0, "days_old": 2, "wg": "GUI App", "labels": ["bug", "web ui", "area::installer", "wg::gui-app"], "assignees": [], "community_tier": null, "is_maintainer": true, "rfc_status": null, "review_requested": []}, {"number": 4148, "title": "feat(gui): allow inference engine changes through custom model overrides", "url": "https://github.com/lemonade-sdk/lemonade/pull/4148", "author": "fl0rianr", "score": 1155, "days_stale": 1, "days_old": 1, "wg": "GUI App", "labels": ["app", "area::api", "wg::gui-app"], "assignees": [], "community_tier": null, "is_maintainer": true, "rfc_status": null, "review_requested": ["kpoineal", "jeremyfowers"]}], "Enterprise Grade": [{"number": 3965, "title": "fix(ci): make llama.cpp auto-update documentation failures visible", "url": "https://github.com/lemonade-sdk/lemonade/pull/3965", "author": "fl0rianr", "score": 1110, "days_stale": 4, "days_old": 21, "wg": "Enterprise Grade", "labels": ["bug", "engine::llamacpp", "area::ci", "ci:backends", "rfc:not-required", "wg::enterprise-grade"], "assignees": [], "community_tier": null, "is_maintainer": true, "rfc_status": "not-required", "review_requested": ["sreeram-11"]}, {"number": 4085, "title": "ci(containers): bump nathanw, keep the smoke test on the last image the runner can run", "url": "https://github.com/lemonade-sdk/lemonade/pull/4085", "author": "sawansri", "score": 855, "days_stale": 7, "days_old": 7, "wg": "Enterprise Grade", "labels": ["area::ci", "wg::enterprise-grade"], "assignees": [], "community_tier": null, "is_maintainer": true, "rfc_status": null, "review_requested": []}, {"number": 3975, "title": "fix(ci): validate sd-cpp auto-updates and flag failed checks", "url": "https://github.com/lemonade-sdk/lemonade/pull/3975", "author": "fl0rianr", "score": 780, "days_stale": 19, "days_old": 19, "wg": "Enterprise Grade", "labels": ["cpp", "engine::sd", "area::ci", "wg::enterprise-grade"], "assignees": [], "community_tier": null, "is_maintainer": true, "rfc_status": null, "review_requested": ["sreeram-11"]}], "Remote Use": [{"number": 4101, "title": "Nexus mesh: bulk uploads through the relay 27 -\u003e 40 MB/s (builds on #4100)", "url": "https://github.com/lemonade-sdk/lemonade/pull/4101", "author": "festeraeb", "score": 105, "days_stale": 0, "days_old": 6, "wg": "Remote Use", "labels": ["wg::remote-use"], "assignees": [], "community_tier": "returning", "is_maintainer": false, "rfc_status": null, "review_requested": []}], "Cloud Hybrid": [{"number": 3930, "title": "Integrate Nexus SDK, device management, and mesh inference selection", "url": "https://github.com/lemonade-sdk/lemonade/pull/3930", "author": "Geramy", "score": 900, "days_stale": 0, "days_old": 23, "wg": "Cloud Hybrid", "labels": ["enhancement", "app", "ci:macos", "ci:distros", "wg::cloud-hybrid"], "assignees": [], "community_tier": null, "is_maintainer": true, "rfc_status": null, "review_requested": ["ramkrishna2910", "bitgamma", "kpoineal"]}, {"number": 3100, "title": "feat(routing): add cost_select deterministic cost-based router", "url": "https://github.com/lemonade-sdk/lemonade/pull/3100", "author": "Bekhouche", "score": 710, "days_stale": 7, "days_old": 93, "wg": "Cloud Hybrid", "labels": ["enhancement", "rfc:not-required", "wg::cloud-hybrid"], "assignees": ["Bekhouche"], "community_tier": null, "is_maintainer": true, "rfc_status": "not-required", "review_requested": ["ramkrishna2910", "eddierichter-amd"]}, {"number": 3169, "title": "feat(routing): add min_turns/max_turns and metadata gte/lte comparators", "url": "https://github.com/lemonade-sdk/lemonade/pull/3169", "author": "Bekhouche", "score": 680, "days_stale": 10, "days_old": 90, "wg": "Cloud Hybrid", "labels": ["enhancement", "wg::cloud-hybrid"], "assignees": ["Bekhouche"], "community_tier": null, "is_maintainer": true, "rfc_status": null, "review_requested": ["ramkrishna2910"]}], "Cross-Vendor Support": [{"number": 3295, "title": "feat(packaging): integrate flatpak packaging and dual-channel distribution", "url": "https://github.com/lemonade-sdk/lemonade/pull/3295", "author": "abn", "score": 690, "days_stale": 6, "days_old": 84, "wg": "Cross-Vendor Support", "labels": ["enhancement", "area::installer", "wg::cross-vendor-support"], "assignees": [], "community_tier": null, "is_maintainer": true, "rfc_status": null, "review_requested": ["jeremyfowers", "kpoineal"]}, {"number": 3679, "title": "fix(server): respect ROCR_VISIBLE_DEVICES in select_rocm_arch", "url": "https://github.com/lemonade-sdk/lemonade/pull/3679", "author": "mkadrlik", "score": 470, "days_stale": 6, "days_old": 48, "wg": "Cross-Vendor Support", "labels": ["bug", "engine::llamacpp", "runtime::rocm", "wg::cross-vendor-support"], "assignees": [], "community_tier": "returning", "is_maintainer": false, "rfc_status": null, "review_requested": ["Geramy"]}, {"number": 4006, "title": "feat: FLM on XDNA3 with a user-supplied FastFlowLM", "url": "https://github.com/lemonade-sdk/lemonade/pull/4006", "author": "chizamd", "score": 205, "days_stale": 12, "days_old": 16, "wg": "Cross-Vendor Support", "labels": ["enhancement", "engine::flm", "wg::cross-vendor-support"], "assignees": [], "community_tier": "returning", "is_maintainer": false, "rfc_status": null, "review_requested": ["iswaryaalex"]}], "Auto-Tune": [{"number": 3988, "title": "fix(auto-tune): correct AMD UMA budgets and preserve CPU offload", "url": "https://github.com/lemonade-sdk/lemonade/pull/3988", "author": "fl0rianr", "score": 1105, "days_stale": 5, "days_old": 17, "wg": "Auto-Tune", "labels": ["bug", "cpp", "engine::llamacpp", "area::api", "runtime::rocm", "ci:backends", "wg::auto-tune"], "assignees": [], "community_tier": null, "is_maintainer": true, "rfc_status": null, "review_requested": ["bitgamma"]}]};
+const RFC_DATA = [{"number": 3542, "title": "RFC: Request to reorganize and fix CMake configuration while reducing overall debt.", "url": "https://github.com/lemonade-sdk/lemonade/discussions/3542", "author": "Geramy", "comments": 4, "days_open": 76, "days_quiet": 76, "rfc_status": "open-for-comment"}, {"number": 3456, "title": "RFC: Persistent cache for GGUF/ccache for speed up CI", "url": "https://github.com/lemonade-sdk/lemonade/discussions/3456", "author": "superm1", "comments": 4, "days_open": 76, "days_quiet": 74, "rfc_status": "open-for-comment"}, {"number": 3562, "title": "RFC: Shared lemond_server test fixture and suite deduplication", "url": "https://github.com/lemonade-sdk/lemonade/discussions/3562", "author": "abn", "comments": 1, "days_open": 63, "days_quiet": 63, "rfc_status": "open-for-comment"}, {"number": 3526, "title": "ci: make inference test matrix test-owned", "url": "https://github.com/lemonade-sdk/lemonade/discussions/3526", "author": "fl0rianr", "comments": 1, "days_open": 65, "days_quiet": 61, "rfc_status": "unlabeled"}, {"number": 3590, "title": "Size the router's LLM pool to the active policy's local candidates", "url": "https://github.com/lemonade-sdk/lemonade/discussions/3590", "author": "QuManu", "comments": 4, "days_open": 60, "days_quiet": 58, "rfc_status": "open-for-comment"}, {"number": 3544, "title": "RFC: Make Lemonade capabilities server-owned and reusable through MCP", "url": "https://github.com/lemonade-sdk/lemonade/discussions/3544", "author": "fl0rianr", "comments": 21, "days_open": 77, "days_quiet": 56, "rfc_status": "on-roadmap"}, {"number": 3671, "title": "RFC: Identify the calling client in log entries", "url": "https://github.com/lemonade-sdk/lemonade/discussions/3671", "author": "T3th", "comments": 2, "days_open": 50, "days_quiet": 50, "rfc_status": "open-for-comment"}, {"number": 3668, "title": "RFC: Improve Model Eviction", "url": "https://github.com/lemonade-sdk/lemonade/discussions/3668", "author": "clemperorpenguin", "comments": 1, "days_open": 50, "days_quiet": 49, "rfc_status": "open-for-comment"}, {"number": 3643, "title": "RFC: Add Atlas Inference backend for native Windows/Linux ROCm inference via pure Rust", "url": "https://github.com/lemonade-sdk/lemonade/discussions/3643", "author": "AzeezIsh", "comments": 3, "days_open": 53, "days_quiet": 45, "rfc_status": "open-for-comment"}, {"number": 3745, "title": "Enable Decision Model Support in Lemonade (via mainline llamacpp)", "url": "https://github.com/lemonade-sdk/lemonade/discussions/3745", "author": "sawansri", "comments": 1, "days_open": 43, "days_quiet": 40, "rfc_status": "open-for-comment"}, {"number": 3785, "title": "RFC: Nexus mesh inference in Lemonade (PR #3693)", "url": "https://github.com/lemonade-sdk/lemonade/discussions/3785", "author": "Geramy", "comments": 0, "days_open": 36, "days_quiet": 36, "rfc_status": "open-for-comment"}, {"number": 3788, "title": "Continuous batching via multiple llama.cpp slots", "url": "https://github.com/lemonade-sdk/lemonade/discussions/3788", "author": "Bekhouche", "comments": 0, "days_open": 35, "days_quiet": 35, "rfc_status": "unlabeled"}, {"number": 3802, "title": "auto KV-cache quantization for llama.cpp models", "url": "https://github.com/lemonade-sdk/lemonade/discussions/3802", "author": "logicminds", "comments": 1, "days_open": 33, "days_quiet": 33, "rfc_status": "open-for-comment"}, {"number": 3694, "title": "RFC: Local token usage log", "url": "https://github.com/lemonade-sdk/lemonade/discussions/3694", "author": "ramkrishna2910", "comments": 7, "days_open": 46, "days_quiet": 30, "rfc_status": "on-roadmap"}, {"number": 3523, "title": "llamacpp:sycl \u2014 first-class Intel GPU backend", "url": "https://github.com/lemonade-sdk/lemonade/discussions/3523", "author": "TravisJ33304", "comments": 2, "days_open": 69, "days_quiet": 26, "rfc_status": "unlabeled"}, {"number": 3913, "title": "Stable Diffusion image generation on the AMD Ryzen AI NPU", "url": "https://github.com/lemonade-sdk/lemonade/discussions/3913", "author": "meghsat", "comments": 1, "days_open": 25, "days_quiet": 25, "rfc_status": "open-for-comment"}, {"number": 3751, "title": "SystemOne Decision Models Integration into lemonade", "url": "https://github.com/lemonade-sdk/lemonade/discussions/3751", "author": "meghsat", "comments": 5, "days_open": 41, "days_quiet": 21, "rfc_status": "open-for-comment"}, {"number": 3974, "title": "RFC: Post-Quantum Cryptography (PQC) for Lemonade-Nexus", "url": "https://github.com/lemonade-sdk/lemonade/discussions/3974", "author": "Slackyster", "comments": 0, "days_open": 19, "days_quiet": 19, "rfc_status": "open-for-comment"}, {"number": 4010, "title": "Add description and author metadata to backends for display in the CLI and GUI", "url": "https://github.com/lemonade-sdk/lemonade/discussions/4010", "author": "jeremyfowers", "comments": 1, "days_open": 15, "days_quiet": 15, "rfc_status": "open-for-comment"}, {"number": 3857, "title": "Agent Manager - Install and Manage Agents with `lemonade agents` + GUI", "url": "https://github.com/lemonade-sdk/lemonade/discussions/3857", "author": "sawansri", "comments": 7, "days_open": 30, "days_quiet": 11, "rfc_status": "open-for-comment"}, {"number": 3732, "title": "Lemonade API Contracts \u0026 Downstream Compatibility Testing", "url": "https://github.com/lemonade-sdk/lemonade/discussions/3732", "author": "iswaryaalex", "comments": 6, "days_open": 43, "days_quiet": 10, "rfc_status": "open-for-comment"}, {"number": 4126, "title": "RFC: Adapter backend for out-of-tree engines (community backends)", "url": "https://github.com/lemonade-sdk/lemonade/discussions/4126", "author": "festeraeb", "comments": 0, "days_open": 4, "days_quiet": 4, "rfc_status": "unlabeled"}];
+const TREND_DATA = [{"date": "2026-08-16", "open_issues": 372, "open_prs": 69}, {"date": "2026-08-17", "open_issues": 376, "open_prs": 72}, {"date": "2026-08-18", "open_issues": 380, "open_prs": 72}, {"date": "2026-08-19", "open_issues": 384, "open_prs": 75}, {"date": "2026-08-20", "open_issues": 391, "open_prs": 62}, {"date": "2026-08-21", "open_issues": 391, "open_prs": 65}, {"date": "2026-08-22", "open_issues": 393, "open_prs": 64}, {"date": "2026-08-23", "open_issues": 393, "open_prs": 66}, {"date": "2026-08-24", "open_issues": 397, "open_prs": 70}, {"date": "2026-08-25", "open_issues": 405, "open_prs": 60}, {"date": "2026-08-26", "open_issues": 401, "open_prs": 63}, {"date": "2026-08-27", "open_issues": 417, "open_prs": 69}, {"date": "2026-08-28", "open_issues": 407, "open_prs": 70}, {"date": "2026-08-29", "open_issues": 404, "open_prs": 68}, {"date": "2026-08-30", "open_issues": 406, "open_prs": 69}, {"date": "2026-08-31", "open_issues": 395, "open_prs": 78}, {"date": "2026-09-01", "open_issues": 399, "open_prs": 81}, {"date": "2026-09-02", "open_issues": 399, "open_prs": 86}, {"date": "2026-09-03", "open_issues": 399, "open_prs": 94}, {"date": "2026-09-04", "open_issues": 401, "open_prs": 95}, {"date": "2026-09-05", "open_issues": 399, "open_prs": 95}, {"date": "2026-09-06", "open_issues": 401, "open_prs": 100}, {"date": "2026-09-07", "open_issues": 402, "open_prs": 100}, {"date": "2026-09-08", "open_issues": 403, "open_prs": 104}, {"date": "2026-09-09", "open_issues": 393, "open_prs": 89}, {"date": "2026-09-10", "open_issues": 394, "open_prs": 85}, {"date": "2026-09-11", "open_issues": 392, "open_prs": 87}, {"date": "2026-09-12", "open_issues": 393, "open_prs": 88}, {"date": "2026-09-13", "open_issues": 394, "open_prs": 91}, {"date": "2026-09-14", "open_issues": 398, "open_prs": 97}, {"date": "2026-09-15", "open_issues": 400, "open_prs": 91}, {"date": "2026-09-16", "open_issues": 402, "open_prs": 90}, {"date": "2026-09-17", "open_issues": 403, "open_prs": 93}, {"date": "2026-09-18", "open_issues": 403, "open_prs": 95}, {"date": "2026-09-19", "open_issues": 402, "open_prs": 93}, {"date": "2026-09-20", "open_issues": 402, "open_prs": 91}, {"date": "2026-09-21", "open_issues": 402, "open_prs": 98}, {"date": "2026-09-22", "open_issues": 404, "open_prs": 101}, {"date": "2026-09-23", "open_issues": 410, "open_prs": 99}, {"date": "2026-09-24", "open_issues": 407, "open_prs": 97}, {"date": "2026-09-25", "open_issues": 404, "open_prs": 99}, {"date": "2026-09-26", "open_issues": 404, "open_prs": 98}, {"date": "2026-09-27", "open_issues": 405, "open_prs": 101}, {"date": "2026-09-28", "open_issues": 405, "open_prs": 104}, {"date": "2026-09-29", "open_issues": 404, "open_prs": 116}, {"date": "2026-09-30", "open_issues": 404, "open_prs": 117}, {"date": "2026-10-01", "open_issues": 407, "open_prs": 122}, {"date": "2026-10-02", "open_issues": 410, "open_prs": 118}, {"date": "2026-10-03", "open_issues": 410, "open_prs": 119}, {"date": "2026-10-04", "open_issues": 411, "open_prs": 124}, {"date": "2026-10-05", "open_issues": 409, "open_prs": 125}, {"date": "2026-10-06", "open_issues": 407, "open_prs": 125}, {"date": "2026-10-07", "open_issues": 409, "open_prs": 126}, {"date": "2026-10-08", "open_issues": 410, "open_prs": 128}, {"date": "2026-10-09", "open_issues": 411, "open_prs": 133}, {"date": "2026-10-10", "open_issues": 413, "open_prs": 138}, {"date": "2026-10-11", "open_issues": 415, "open_prs": 140}, {"date": "2026-10-12", "open_issues": 417, "open_prs": 141}, {"date": "2026-10-13", "open_issues": 418, "open_prs": 146}, {"date": "2026-10-14", "open_issues": 419, "open_prs": 143}, {"date": "2026-10-15", "open_issues": 417, "open_prs": 147}, {"date": "2026-10-16", "open_issues": 418, "open_prs": 146}, {"date": "2026-10-17", "open_issues": 420, "open_prs": 154}, {"date": "2026-10-18", "open_issues": 425, "open_prs": 148}, {"date": "2026-10-19", "open_issues": 425, "open_prs": 145}, {"date": "2026-10-20", "open_issues": 426, "open_prs": 143}, {"date": "2026-10-21", "open_issues": 427, "open_prs": 142}, {"date": "2026-10-22", "open_issues": 431, "open_prs": 149}, {"date": "2026-10-23", "open_issues": 431, "open_prs": 156}, {"date": "2026-10-24", "open_issues": 431, "open_prs": 157}, {"date": "2026-10-25", "open_issues": 431, "open_prs": 160}, {"date": "2026-10-26", "open_issues": 431, "open_prs": 160}, {"date": "2026-10-27", "open_issues": 422, "open_prs": 159}, {"date": "2026-10-28", "open_issues": 421, "open_prs": 154}, {"date": "2026-10-29", "open_issues": 424, "open_prs": 160}, {"date": "2026-10-30", "open_issues": 432, "open_prs": 162}, {"date": "2026-10-31", "open_issues": 431, "open_prs": 161}, {"date": "2026-11-01", "open_issues": 431, "open_prs": 164}, {"date": "2026-11-02", "open_issues": 434, "open_prs": 167}, {"date": "2026-11-03", "open_issues": 438, "open_prs": 162}, {"date": "2026-11-04", "open_issues": 436, "open_prs": 160}, {"date": "2026-11-05", "open_issues": 440, "open_prs": 157}, {"date": "2026-11-06", "open_issues": 441, "open_prs": 161}, {"date": "2026-11-07", "open_issues": 443, "open_prs": 165}, {"date": "2026-11-08", "open_issues": 444, "open_prs": 173}, {"date": "2026-11-09", "open_issues": 446, "open_prs": 177}, {"date": "2026-11-10", "open_issues": 447, "open_prs": 172}, {"date": "2026-11-11", "open_issues": 451, "open_prs": 170}, {"date": "2026-11-12", "open_issues": 456, "open_prs": 180}, {"date": "2026-11-13", "open_issues": 455, "open_prs": 187}, {"date": "2026-11-14", "open_issues": 456, "open_prs": 186}];
+const PULSE = {"generated_at": "2026-11-14 18:27 UTC", "window_days": 7, "merged_count": 23, "merged": [{"number": 4140, "title": "Run linux embedded build on Ubuntu 24.04", "url": "https://github.com/lemonade-sdk/lemonade/pull/4140", "author": "superm1", "merged_at": "2026-11-14T12:29:40Z"}, {"number": 4155, "title": "fix(ollama): reject models that can't chat or generate before loading them", "url": "https://github.com/lemonade-sdk/lemonade/pull/4155", "author": "sreeram-11", "merged_at": "2026-11-14T01:19:34Z"}, {"number": 3807, "title": "Triage Dashboard Additional View", "url": "https://github.com/lemonade-sdk/lemonade/pull/3807", "author": "iswaryaalex", "merged_at": "2026-11-14T00:36:44Z"}, {"number": 4151, "title": "repo-manager action: track lemonade-testing's runner instead of pinning", "url": "https://github.com/lemonade-sdk/lemonade/pull/4151", "author": "jeremyfowers", "merged_at": "2026-11-13T20:31:02Z"}, {"number": 4156, "title": "fix(CI): Porting the SystemOne test model to Laya from Julia", "url": "https://github.com/lemonade-sdk/lemonade/pull/4156", "author": "meghsat", "merged_at": "2026-11-13T19:12:16Z"}, {"number": 4146, "title": "Raise lemond's descriptor limit and retry pinned Nexus reads", "url": "https://github.com/lemonade-sdk/lemonade/pull/4146", "author": "Geramy", "merged_at": "2026-11-12T17:38:28Z"}, {"number": 4145, "title": "Repeat relayed POSTs that got no answer, 504 for a slow device, and launch --device", "url": "https://github.com/lemonade-sdk/lemonade/pull/4145", "author": "Geramy", "merged_at": "2026-11-12T17:13:58Z"}, {"number": 4142, "title": "Serve the Nexus routes under /v1 only", "url": "https://github.com/lemonade-sdk/lemonade/pull/4142", "author": "Geramy", "merged_at": "2026-11-12T17:07:54Z"}, {"number": 4143, "title": "Nexus web app: label device names as devices and trim the help text", "url": "https://github.com/lemonade-sdk/lemonade/pull/4143", "author": "Geramy", "merged_at": "2026-11-12T17:06:14Z"}, {"number": 4130, "title": "fix(gui3): Upgrading banners to GUI3", "url": "https://github.com/lemonade-sdk/lemonade/pull/4130", "author": "meghsat", "merged_at": "2026-11-11T07:44:27Z"}, {"number": 4125, "title": "fix(docs/api): describe optional image generation metadata", "url": "https://github.com/lemonade-sdk/lemonade/pull/4125", "author": "fl0rianr", "merged_at": "2026-11-11T03:14:49Z"}, {"number": 4115, "title": "ci: harden workflows against tzdata hangs, artifact upload errors and unprovisioned runners", "url": "https://github.com/lemonade-sdk/lemonade/pull/4115", "author": "sreeram-11", "merged_at": "2026-11-11T02:24:20Z"}, {"number": 4091, "title": "Fix rpm creation issues on OpenSUSE", "url": "https://github.com/lemonade-sdk/lemonade/pull/4091", "author": "DigitalFlow", "merged_at": "2026-11-10T21:49:33Z"}, {"number": 4096, "title": "Add GGUF zero-shot routers on llama.cpp: encoder in llama-server, rule head in lemond", "url": "https://github.com/lemonade-sdk/lemonade/pull/4096", "author": "meghsat", "merged_at": "2026-11-10T20:38:09Z"}, {"number": 4117, "title": "test: wait for DirectoryWatcher detection instead of fixed sleeps", "url": "https://github.com/lemonade-sdk/lemonade/pull/4117", "author": "sreeram-11", "merged_at": "2026-11-10T19:45:52Z"}, {"number": 4108, "title": "fix(models): list every shard in model file inventory", "url": "https://github.com/lemonade-sdk/lemonade/pull/4108", "author": "pwilkin", "merged_at": "2026-11-10T17:48:28Z"}, {"number": 3674, "title": "app: store favicon.ico as a regular file", "url": "https://github.com/lemonade-sdk/lemonade/pull/3674", "author": "apollo-2006", "merged_at": "2026-11-10T16:46:38Z"}, {"number": 4122, "title": "fix(server): prevent auth bypass with an empty admin API key", "url": "https://github.com/lemonade-sdk/lemonade/pull/4122", "author": "fl0rianr", "merged_at": "2026-11-10T15:56:36Z"}, {"number": 4116, "title": "test: remove network and cleanup flakiness from Ollama, Whisper and endpoint tests", "url": "https://github.com/lemonade-sdk/lemonade/pull/4116", "author": "sreeram-11", "merged_at": "2026-11-10T11:12:39Z"}, {"number": 4103, "title": "Fix unhelpful API key error in the CLI", "url": "https://github.com/lemonade-sdk/lemonade/pull/4103", "author": "MrAnayDongre", "merged_at": "2026-11-10T08:04:25Z"}, {"number": 4084, "title": "fix(gui): pack backend cards into an aligned grid", "url": "https://github.com/lemonade-sdk/lemonade/pull/4084", "author": "danielholanda", "merged_at": "2026-11-10T01:14:15Z"}, {"number": 4109, "title": "fix(test): Fix build for MSVC (Visual Studio 2026)", "url": "https://github.com/lemonade-sdk/lemonade/pull/4109", "author": "julianxhokaxhiu", "merged_at": "2026-11-09T11:55:30Z"}, {"number": 4094, "title": "Beacon fixes: share the beacon port, escape the hostname", "url": "https://github.com/lemonade-sdk/lemonade/pull/4094", "author": "festeraeb", "merged_at": "2026-11-08T23:09:29Z"}], "new_prs_count": 50, "open_prs_total": 186, "new_issues_count": 19, "new_bugs_count": 7, "open_issues_total": 456, "wg_merged": {"Enterprise Grade": 7, "Unclassified": 2, "Platform Core": 7, "Remote Use": 2, "GUI App": 4, "Cloud Hybrid": 1}, "top_contributors": [{"login": "sreeram-11", "merged": 4}, {"login": "Geramy", "merged": 4}, {"login": "meghsat", "merged": 3}, {"login": "fl0rianr", "merged": 2}, {"login": "jeremyfowers", "merged": 1}]};
+
+// ── filter state ──
+const state = {
+  wg: "",           // "" = all, "__unclaimed__" = no wg, or a wg name
+  maintainer: false,
+  firstTimer: false,
+  wgLead: false,
+  staleDays: 0,     // 0 = any, 14, 30, or 60
+  rfcRequired: false,
+  suggested: false,
+};
+
+// ── helpers ──
+function esc(s) {
+  return String(s).replace(/[&<>"']/g,
+    c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+function ageText(d) {
+  if(d<1) return "today"; if(d<30) return d+"d";
+  if(d<365) return Math.floor(d/30)+"mo"; return Math.floor(d/365)+"y";
+}
+function ageClass(d) { return d>=60?"age-60":d>=30?"age-30":d>=14?"age-14":""; }
+
+function prChips(pr) {
+  const chips = [];
+  if(pr.is_draft) chips.push('<span class="chip draft">draft</span>');
+  if(pr.labels.some(l=>l.startsWith("priority::")&&l.includes("hot")))
+    chips.push('<span class="chip hot">HOT</span>');
+  else if(pr.labels.some(l=>l.startsWith("priority::")&&l.includes("warm")))
+    chips.push('<span class="chip warm">WARM</span>');
+  if(pr.wg && pr.wg_source==="predicted")
+    chips.push(`<span class="chip wg predicted" title="auto-classified: ${esc(pr.wg_reason||"")}">${esc(pr.wg)} (auto)</span>`);
+  else if(pr.wg) chips.push(`<span class="chip wg">${esc(pr.wg)}</span>`);
+  if(pr.is_maintainer) chips.push('<span class="chip maint">maintainer</span>');
+  else if(pr.community_tier==="wg-lead") chips.push('<span class="chip lead">WG lead / owner</span>');
+  else if(pr.community_tier==="active") chips.push('<span class="chip active">active contributor</span>');
+  else if(pr.community_tier==="first-timer") chips.push('<span class="chip first">first-timer</span>');
+  if(pr.days_stale>=14) chips.push(`<span class="chip stale">${pr.days_stale}d stale</span>`);
+  if(pr.rfc_status) {
+    const RFC_LABEL = {"required":"RFC required","on-roadmap":"RFC on roadmap","open-for-comment":"RFC open","not-required":"RFC not required"};
+    const rfcColor = pr.rfc_status==="required" ? "var(--hot)" : pr.rfc_status==="on-roadmap" ? "var(--first)" : "var(--muted)";
+    chips.push(`<span style="display:inline-block;padding:1px 6px;border-radius:8px;font-size:11px;font-weight:600;background:var(--panel-2);border:1px solid ${rfcColor};color:${rfcColor}">${RFC_LABEL[pr.rfc_status]||pr.rfc_status}</span>`);
+  }
+  return chips.join(" ");
+}
+
+function prCard(pr) {
+  const ageC = ageClass(pr.days_stale);
+  const assignees = pr.assignees.length
+    ? pr.assignees.map(a=>`@${esc(a)}`).join(", ")
+    : "<em>unassigned</em>";
+  const labelPills = pr.labels
+    .map(l=>`<span class="label-chip">${esc(l)}</span>`).join("");
+  const chips = prChips(pr);
+  return `
+    <div class="pr-card${pr.is_draft?" is-draft":""}">
+      <div class="pr-head">
+        <span class="pr-num">#${pr.number}</span>
+        <span class="pr-title">
+          <a href="${pr.url}" target="_blank" rel="noopener">${esc(pr.title)}</a>
+        </span>
+      </div>
+      <div class="pr-meta">
+        <span>by <strong><a href="https://github.com/${esc(pr.author)}"
+          target="_blank" rel="noopener">${esc(pr.author)}</a></strong></span>
+        <span>opened ${ageText(pr.days_old)} ago</span>
+        <span class="${ageC}" title="Last human comment, review, or push; bot label changes are ignored">active ${ageText(pr.days_stale)} ago</span>
+        <span>${pr.comments} comment${pr.comments===1?"":"s"}</span>
+        <span>→ ${assignees}</span>
+        ${pr.suggested_reviewers.length ? `<span class="suggest">suggested: ${pr.suggested_reviewers
+          .map(r=>`<strong title="${esc(r.why)}">@${esc(r.login)}</strong>`).join(", ")}</span>` : ""}
+      </div>
+      <div class="pr-chips">${chips}${labelPills?`<span style="margin-left:4px">${labelPills}</span>`:""}</div>
+    </div>`;
+}
+
+// ── filtering ──
+function matchesPR(pr) {
+  // No filter active = show everything
+  const SPECIAL = ["__unclaimed__","__maintainers__","__community__"];
+  if(state.wg === "__unclaimed__"   && pr.wg) return false;
+  if(state.wg === "__maintainers__" && !pr.is_maintainer) return false;
+  if(state.wg === "__community__"   && pr.is_maintainer) return false;
+  if(state.wg && !SPECIAL.includes(state.wg) && pr.wg !== state.wg) return false;
+  if(state.maintainer && !pr.is_maintainer) return false;
+  if(state.firstTimer && pr.community_tier !== "first-timer") return false;
+  if(state.wgLead && pr.community_tier !== "wg-lead") return false;
+  if(state.staleDays && pr.days_stale < state.staleDays) return false;
+  if(state.rfcRequired && pr.rfc_status !== "required") return false;
+  if(state.suggested && !pr.suggested_reviewers.length) return false;
+  return true;
+}
+
+// ── grouping ──
+function groupKey(pr) {
+  const wgFiltered = state.wg && !["__maintainers__","__community__","__unclaimed__"].includes(state.wg);
+  const contribFiltered = state.maintainer || state.firstTimer || state.wgLead
+    || state.wg === "__maintainers__" || state.wg === "__community__";
+
+  // Filtering by a specific WG: group by contributor tier
+  if(wgFiltered) {
+    if(pr.is_maintainer) return {key:"__maint__", label:"Maintainer PRs", order:0};
+    if(pr.community_tier==="wg-lead") return {key:"__lead__", label:"Key Contributors", order:1};
+    if(pr.community_tier==="active") return {key:"__active__", label:"Active Contributors", order:2};
+    if(pr.community_tier==="first-timer") return {key:"__first__", label:"First-timers", order:4};
+    return {key:"__returning__", label:"Returning Contributors", order:3};
+  }
+
+  // Filtering by contributor type: group by WG
+  if(contribFiltered) {
+    if(pr.wg) return {key:"wg:"+pr.wg, label:`WG: ${pr.wg}`, order:1};
+    return {key:"__unclaimed__", label:"No Workgroup", order:2};
+  }
+
+  // All PRs: WGs in canonical order, then no-WG buckets by contributor tier
+  const wgIdx = ALL_WGS.indexOf(pr.wg);
+  if(pr.wg && wgIdx !== -1) return {key:"wg:"+pr.wg, label:`WG: ${pr.wg}`, order:wgIdx};
+  // Unknown WG name (shouldn't happen) — show before no-WG buckets
+  if(pr.wg) return {key:"wg:"+pr.wg, label:`WG: ${pr.wg}`, order:ALL_WGS.length};
+  const noWgBase = ALL_WGS.length + 1;
+  if(pr.is_maintainer) return {key:"__maint__", label:"Maintainer PRs — no WG", order:noWgBase};
+  if(pr.community_tier==="wg-lead") return {key:"__lead__", label:"Key Contributors — no WG", order:noWgBase+1};
+  if(pr.community_tier==="active") return {key:"__active__", label:"Active Contributors — no WG", order:noWgBase+2};
+  if(pr.community_tier==="first-timer") return {key:"__first__", label:"First-timers — no WG", order:noWgBase+4};
+  return {key:"__returning__", label:"Returning Contributors — no WG", order:noWgBase+3};
+}
+
+// ── render ──
+function render() {
+  const matches = DATA.filter(matchesPR);
+
+  // Sort: hot first, then most recently updated first
+  matches.sort((a,b)=>{
+    const ah = a.labels.some(l=>l.startsWith("priority::")&&l.includes("hot"))?1:0;
+    const bh = b.labels.some(l=>l.startsWith("priority::")&&l.includes("hot"))?1:0;
+    return bh-ah || a.days_stale-b.days_stale;
+  });
+
+  // Group
+  const groups = {};
+  for(const pr of matches) {
+    const g = groupKey(pr);
+    if(!groups[g.key]) groups[g.key] = {...g, prs:[]};
+    groups[g.key].prs.push(pr);
+  }
+  const sorted = Object.values(groups).sort((a,b)=>a.order-b.order||a.label.localeCompare(b.label));
+
+  const container = document.getElementById("pr-list");
+  if(!matches.length) {
+    container.innerHTML = '<div class="empty">No PRs match the current filters.</div>';
+  } else {
+    let html = "";
+    for(const g of sorted) {
+      html += `<div class="group-header">
+        <span>${esc(g.label)}</span>
+        <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)">
+          ${g.prs.length} PR${g.prs.length===1?"":"s"}
+        </span>
+      </div>`;
+      html += g.prs.map(prCard).join("");
+    }
+    container.innerHTML = html;
+  }
+
+  // Result bar
+  document.getElementById("result-count").textContent =
+    `Showing ${matches.length} of ${DATA.length} open PRs`;
+
+  const parts = [];
+  if(state.wg==="__unclaimed__")   parts.push("no WG");
+  else if(state.wg==="__maintainers__") parts.push("maintainers");
+  else if(state.wg==="__community__")   parts.push("community");
+  else if(state.wg) parts.push(state.wg);
+  if(state.maintainer) parts.push("maintainers only");
+  if(state.firstTimer) parts.push("first-timers only");
+  if(state.wgLead) parts.push("WG leads / owners only");
+  if(state.staleDays) parts.push(`${state.staleDays}d+ stale`);
+  if(state.rfcRequired) parts.push("RFC required");
+  if(state.suggested) parts.push("has suggested reviewer");
+  document.getElementById("result-breakdown").textContent =
+    parts.length ? "Filters: " + parts.join(" · ") : "All open PRs";
+}
+
+function renderPulse() {
+  const summary = document.getElementById("pulse-summary");
+  const detail  = document.getElementById("pulse-detail");
+  if (!PULSE || !summary) return;
+  const p = PULSE;
+  const wgMerged = p.wg_merged || {};
+  const rfcActive = RFC_DATA.filter(r=>r.days_quiet<=14);
+  const rfcStale  = RFC_DATA.filter(r=>r.days_quiet>=30);
+  const rfcNeedReview = RFC_DATA.filter(r=>r.days_quiet<=14).slice().sort((a,b)=>b.comments-a.comments);
+  const rfcHotStale   = RFC_DATA.filter(r=>r.days_quiet>14).slice().sort((a,b)=>b.comments-a.comments).slice(0,5);
+
+  // Top WGs by merge count
+  const topWGs = Object.entries(wgMerged).sort((a,b)=>b[1]-a[1]).slice(0,3);
+  const wgSummary = topWGs.map(([wg,n])=>`<strong>${esc(wg)}</strong> (${n})`).join(", ");
+
+  // Top contributors
+  const topC = (p.top_contributors||[]).slice(0,4).map(c=>`@${esc(c.login)} (${c.merged})`).join(", ");
+
+  // Prose narrative
+  const wgLead = topWGs[0] ? `${topWGs[0][0]} led with ${topWGs[0][1]}` : "";
+  const rfcLine = rfcActive.length
+    ? `${rfcActive.length} RFC${rfcActive.length>1?"s":""} actively discussed`
+    : "no RFC activity";
+  const staleLine = rfcStale.length ? `${rfcStale.length} gone quiet 30d+` : "";
+
+  summary.innerHTML = `<span style="font-size:13px;font-weight:700;color:var(--fg);">Last week</span>
+    <span style="font-size:13px;color:var(--muted);margin-left:4px;">
+      <strong style="color:var(--fg)">${p.merged_count} PRs merged</strong> —
+      ${wgLead ? wgLead + ". " : ""}${topC ? "Top contributors: " + topC + "." : ""}
+      ${p.new_issues_count} new issue${p.new_issues_count!==1?"s":""}, ${p.new_bugs_count} bug${p.new_bugs_count!==1?"s":""}.
+      ${rfcLine}${staleLine ? "; " + staleLine : ""}.
+    </span>
+    <span class="pulse-toggle" style="margin-left:auto;"></span>`;
+
+  // Merged PRs sub-section (collapsed)
+  const mergedRows = (p.merged||[]).slice(0,20).map(m=>`
+    <tr>
+      <td><a href="${esc(m.url)}" target="_blank" rel="noopener">#${m.number}</a></td>
+      <td>${esc((m.title||"").slice(0,80))}</td>
+      <td style="color:var(--muted)">@${esc(m.author)}</td>
+      <td style="color:var(--muted)">${(m.merged_at||"").slice(0,10)}</td>
+    </tr>`).join("");
+
+  // RFC sub-section (collapsed)
+  const rfcRows = [...rfcActive.map(r=>[r,"#56d364","active"]),
+    ...rfcHotStale.map(r=>[r,r.days_quiet>=30?"#ff7b72":"#ffa657",`stale ${r.days_quiet}d`])]
+    .map(([r,color,status])=>`
+      <tr>
+        <td><a href="${esc(r.url)}" target="_blank" rel="noopener">#${r.number}</a></td>
+        <td>${esc((r.title||"").slice(0,72))}</td>
+        <td style="color:${color}">${status}</td>
+        <td>${r.comments}</td>
+      </tr>`).join("");
+
+  detail.innerHTML = `
+    <details style="margin-bottom:10px;">
+      <summary class="pulse-subsummary">${p.merged_count} merged PRs — by workgroup: ${wgSummary}</summary>
+      <table class="pulse-table" style="margin-top:8px;">
+        <thead><tr><th>#</th><th>Title</th><th>Author</th><th>Merged</th></tr></thead>
+        <tbody>${mergedRows}</tbody>
+      </table>
+    </details>
+    <details>
+      <summary class="pulse-subsummary">RFCs — ${rfcActive.length} active · ${rfcStale.length} stale · ${RFC_DATA.length} total</summary>
+      <table class="pulse-table" style="margin-top:8px;">
+        <thead><tr><th>#</th><th>Title</th><th>Status</th><th>Comments</th></tr></thead>
+        <tbody>${rfcRows}</tbody>
+      </table>
+    </details>`;
+}
+
+function renderNewPRs() {
+  const body = document.getElementById("new-prs-body");
+  const countEl = document.getElementById("new-prs-count");
+  if (!body) return;
+  const newPRs = DATA.filter(pr =>
+    !pr.is_draft &&
+    pr.days_old <= 14 &&
+    pr.community_tier !== "first-timer" &&
+    (!pr.review_requested || !pr.review_requested.length)
+  ).sort((a, b) => a.days_old - b.days_old);
+  countEl.textContent = newPRs.length
+    ? `${newPRs.length} PR${newPRs.length>1?"s":""} need a reviewer`
+    : "all covered";
+  if (!newPRs.length) {
+    body.innerHTML = `<div style="color:#56d364;font-size:12px;">All recent PRs have a reviewer assigned.</div>`;
+    return;
+  }
+  let html = `<div class="focus-cards">`;
+  for (const pr of newPRs) {
+    const sugg = (pr.suggested_reviewers||[]).slice(0,2);
+    const suggLine = sugg.length
+      ? `<div class="focus-reviewer">suggest: ${sugg.map(r=>`<strong>@${esc(r.login)}</strong><span title="${esc(r.why)}" style="cursor:help;color:var(--muted)"> ⓘ</span>`).join(", ")}</div>`
+      : `<div class="focus-reviewer no-reviewer">⚠ no suggestion — needs manual triage</div>`;
+    const wgChip = pr.wg
+      ? `<span class="chip wg${pr.wg_source==="predicted"?" predicted":""}" style="font-size:10px;">${esc(pr.wg)}</span> `
+      : "";
+    const ageBg = pr.days_old <= 2 ? "background:#0d4429;color:#56d364;" : "";
+    html += `<div class="focus-card" style="border-color:${sugg.length?"var(--border)":"#ffa657"}">
+      <span class="score-badge" style="${ageBg}">${pr.days_old}d old</span>
+      <div>${wgChip}<a href="${esc(pr.url)}" target="_blank" rel="noopener">#${pr.number} ${esc(pr.title.length>58?pr.title.slice(0,58)+"…":pr.title)}</a></div>
+      <div class="focus-meta"><span>by @${esc(pr.author)}</span><span style="color:var(--muted)">${esc(pr.community_tier||"")}</span></div>
+      ${suggLine}
+    </div>`;
+  }
+  html += `</div>`;
+  body.innerHTML = html;
+}
+
+function renderFocusPanel() {
+  const body = document.getElementById("focus-body");
+  const countEl = document.getElementById("focus-count");
+  const wgs = Object.keys(FOCUS_DATA).sort();
+  if (!wgs.length) { body.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:10px 0">No workgroup data</div>'; return; }
+  let total = 0;
+  let html = "";
+  for (const wg of ALL_WGS) {
+    const prs = FOCUS_DATA[wg];
+    if (!prs || !prs.length) continue;
+    total += prs.length;
+    html += `<div class="focus-wg-section"><div class="focus-wg-label">${esc(wg)}</div><div class="focus-cards">`;
+    for (const pr of prs) {
+      const reasons = [];
+      if (pr.labels.some(l=>l.includes("hot"))) reasons.push("HOT");
+      else if (pr.labels.some(l=>l.includes("warm"))) reasons.push("WARM");
+      if (pr.labels.includes("bug")) reasons.push("bug");
+      if (pr.rfc_status==="required") reasons.push("RFC required");
+      if (pr.days_stale>=60) reasons.push(`${pr.days_stale}d stale`);
+      else if (pr.days_stale>=30) reasons.push(`${pr.days_stale}d stale`);
+      if (!pr.assignees.length) reasons.push("unassigned");
+      if (pr.community_tier==="first-timer") reasons.push("first-timer");
+      const revLine = pr.review_requested && pr.review_requested.length
+        ? `<div class="focus-reviewer">reviewer: ${pr.review_requested.slice(0,2).map(r=>`<strong>@${esc(r)}</strong>`).join(", ")}</div>`
+        : `<div class="focus-reviewer no-reviewer">⚠ no reviewer yet</div>`;
+      html += `<div class="focus-card">
+        <span class="score-badge">${pr.score}</span>
+        <div><a href="${pr.url}" target="_blank" rel="noopener">#${pr.number} ${esc(pr.title.length>60?pr.title.slice(0,60)+"…":pr.title)}</a></div>
+        <div class="focus-meta">${reasons.map(r=>`<span>${esc(r)}</span>`).join(" · ")}</div>
+        ${revLine}
+      </div>`;
+    }
+    html += "</div></div>";
+  }
+  body.innerHTML = html;
+  countEl.textContent = `${total} highlight${total===1?"":"s"} across ${wgs.filter(w=>FOCUS_DATA[w]?.length).length} workgroups`;
+}
+
+function renderRFCPanel() {
+  const body = document.getElementById("rfc-body");
+  const countEl = document.getElementById("rfc-panel-count");
+  countEl.textContent = RFC_DATA.length;
+  if (!RFC_DATA.length) {
+    body.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:10px 0">No open RFCs found</div>';
+    return;
+  }
+  const STATUS_COLOR = {"on-roadmap":"var(--first)","open-for-comment":"var(--link)","not-planned":"var(--hot)","unlabeled":"var(--muted)"};
+  const STATUS_LABEL = {"on-roadmap":"on roadmap","open-for-comment":"open for comment","not-planned":"not planned","unlabeled":"no status label"};
+  let html = `<table class="rfc-table"><thead><tr>
+    <th>Title</th><th>Author</th><th>Days open</th><th>Last activity</th><th>Comments</th><th>Status</th>
+  </tr></thead><tbody>`;
+  for (const rfc of RFC_DATA) {
+    const rowCls = rfc.days_quiet>=30?"rfc-very-stale":rfc.days_quiet>=14?"rfc-stale":"";
+    const color = STATUS_COLOR[rfc.rfc_status] || "var(--muted)";
+    const label = STATUS_LABEL[rfc.rfc_status] || rfc.rfc_status;
+    html += `<tr class="${rowCls}">
+      <td><a href="${esc(rfc.url)}" target="_blank" rel="noopener">#${rfc.number} ${esc(rfc.title)}</a></td>
+      <td>@${esc(rfc.author)}</td>
+      <td>${rfc.days_open}d</td>
+      <td>${rfc.days_quiet===0?"today":rfc.days_quiet+"d ago"}</td>
+      <td>${rfc.comments}</td>
+      <td><span class="rfc-status-chip" style="color:${color};border-color:${color}">${esc(label)}</span></td>
+    </tr>`;
+  }
+  html += "</tbody></table>";
+  body.innerHTML = html;
+}
+
+function renderTrendChart() {
+  const el = document.getElementById("trend-chart-wrap");
+  if (!TREND_DATA.length) { el.innerHTML = ""; return; }
+  const W = el.getBoundingClientRect().width || el.parentElement.getBoundingClientRect().width || 600;
+  const H = 100;
+  const maxIssues = Math.max(...TREND_DATA.map(d=>d.open_issues), 1);
+  const maxPRs    = Math.max(...TREND_DATA.map(d=>d.open_prs), 1);
+  const maxY = Math.max(maxIssues, maxPRs, 1);
+  const n = TREND_DATA.length;
+  const ptIssues = TREND_DATA.map((d,i)=>[((i/(n-1||1))*W).toFixed(1), (H-((d.open_issues/maxY)*H)).toFixed(1)]);
+  const ptPRs    = TREND_DATA.map((d,i)=>[((i/(n-1||1))*W).toFixed(1), (H-((d.open_prs/maxY)*H)).toFixed(1)]);
+  const pathI = ptIssues.map((p,i)=>`${i===0?"M":"L"} ${p[0]} ${p[1]}`).join(" ");
+  const pathP = ptPRs.map((p,i)=>`${i===0?"M":"L"} ${p[0]} ${p[1]}`).join(" ");
+  const idxs = [0, Math.floor(n/4), Math.floor(n/2), Math.floor(3*n/4), n-1];
+  const xLabels = idxs.map(i=>{
+    if(i>=n) return "";
+    const x = (i/(n-1||1))*W;
+    return `<text x="${x.toFixed(1)}" y="${H+14}" fill="var(--muted)" font-size="9" text-anchor="middle">${TREND_DATA[i].date.slice(5)}</text>`;
+  }).join("");
+  el.innerHTML = `<svg width="100%" viewBox="0 0 ${W} ${H+18}" preserveAspectRatio="none" style="display:block;overflow:visible">
+    <path d="${pathI}" fill="none" stroke="var(--stale)" stroke-width="1.5" stroke-linejoin="round" opacity="0.85"/>
+    <path d="${pathP}" fill="none" stroke="#d2a8ff" stroke-width="1.5" stroke-linejoin="round" opacity="0.85"/>
+    ${xLabels}
+    <text x="4" y="10" fill="var(--muted)" font-size="9">${maxY}</text>
+  </svg>`;
+}
+
+function updateSummary() {
+  document.getElementById("hdr-total").textContent = DATA.length;
+  document.getElementById("hdr-wg-count").textContent =
+    DATA.filter(pr=>pr.wg).length + " with workgroup";
+  document.getElementById("hdr-maint-count").textContent =
+    DATA.filter(pr=>pr.is_maintainer).length + " maintainer PRs";
+  document.getElementById("hdr-first-count").textContent =
+    DATA.filter(pr=>pr.community_tier==="first-timer").length + " first-timers";
+  document.getElementById("hdr-stale-count").textContent =
+    DATA.filter(pr=>pr.days_stale>=30).length + " stale 30d+";
+  document.getElementById("hdr-rfc-count").textContent =
+    DATA.filter(pr=>pr.rfc_status==="required").length + " RFC required";
+}
+
+// ── wire up controls ──
+document.getElementById("wg-select").addEventListener("change", e=>{
+  state.wg = e.target.value; render();
+});
+
+function wireToggle(id, stateKey) {
+  document.getElementById(id).addEventListener("click", function() {
+    state[stateKey] = !state[stateKey];
+    this.classList.toggle("on", state[stateKey]);
+    render();
+  });
+}
+wireToggle("tog-maintainer", "maintainer");
+wireToggle("tog-first",      "firstTimer");
+wireToggle("tog-lead",       "wgLead");
+wireToggle("tog-rfc-required", "rfcRequired");
+wireToggle("tog-suggested",    "suggested");
+
+// Stale toggles are exclusive (picking one clears others)
+const staleToggles = [
+  {id:"tog-stale14", days:14},
+  {id:"tog-stale30", days:30},
+  {id:"tog-stale60", days:60},
+];
+for(const {id, days} of staleToggles) {
+  document.getElementById(id).addEventListener("click", function() {
+    const newDays = state.staleDays === days ? 0 : days;
+    state.staleDays = newDays;
+    staleToggles.forEach(t=>{
+      document.getElementById(t.id).classList.toggle("on", newDays===t.days);
+    });
+    render();
+  });
+}
+
+document.getElementById("clear-btn").addEventListener("click", ()=>{
+  state.wg=""; state.maintainer=false; state.firstTimer=false;
+  state.wgLead=false; state.staleDays=0; state.rfcRequired=false; state.suggested=false;
+  document.getElementById("wg-select").value = "";
+  document.querySelectorAll(".toggle").forEach(b=>b.classList.remove("on"));
+  render();
+});
+
+
+const ACTIVITY = [{"date": "2026-10-16", "opened": 9, "merged": 10, "closed_nm": 0, "running_open": 146}, {"date": "2026-10-17", "opened": 10, "merged": 2, "closed_nm": 0, "running_open": 154}, {"date": "2026-10-18", "opened": 4, "merged": 10, "closed_nm": 0, "running_open": 148}, {"date": "2026-10-19", "opened": 7, "merged": 10, "closed_nm": 0, "running_open": 145}, {"date": "2026-10-20", "opened": 5, "merged": 7, "closed_nm": 0, "running_open": 143}, {"date": "2026-10-21", "opened": 5, "merged": 6, "closed_nm": 0, "running_open": 142}, {"date": "2026-10-22", "opened": 15, "merged": 7, "closed_nm": 1, "running_open": 149}, {"date": "2026-10-23", "opened": 11, "merged": 4, "closed_nm": 0, "running_open": 156}, {"date": "2026-10-24", "opened": 5, "merged": 4, "closed_nm": 0, "running_open": 157}, {"date": "2026-10-25", "opened": 5, "merged": 2, "closed_nm": 0, "running_open": 160}, {"date": "2026-10-26", "opened": 1, "merged": 1, "closed_nm": 0, "running_open": 160}, {"date": "2026-10-27", "opened": 10, "merged": 11, "closed_nm": 0, "running_open": 159}, {"date": "2026-10-28", "opened": 8, "merged": 13, "closed_nm": 0, "running_open": 154}, {"date": "2026-10-29", "opened": 8, "merged": 2, "closed_nm": 0, "running_open": 160}, {"date": "2026-10-30", "opened": 8, "merged": 6, "closed_nm": 0, "running_open": 162}, {"date": "2026-10-31", "opened": 2, "merged": 3, "closed_nm": 0, "running_open": 161}, {"date": "2026-11-01", "opened": 3, "merged": 0, "closed_nm": 0, "running_open": 164}, {"date": "2026-11-02", "opened": 4, "merged": 1, "closed_nm": 0, "running_open": 167}, {"date": "2026-11-03", "opened": 4, "merged": 7, "closed_nm": 2, "running_open": 162}, {"date": "2026-11-04", "opened": 10, "merged": 10, "closed_nm": 2, "running_open": 160}, {"date": "2026-11-05", "opened": 6, "merged": 9, "closed_nm": 0, "running_open": 157}, {"date": "2026-11-06", "opened": 7, "merged": 3, "closed_nm": 0, "running_open": 161}, {"date": "2026-11-07", "opened": 7, "merged": 3, "closed_nm": 0, "running_open": 165}, {"date": "2026-11-08", "opened": 11, "merged": 1, "closed_nm": 2, "running_open": 173}, {"date": "2026-11-09", "opened": 5, "merged": 1, "closed_nm": 0, "running_open": 177}, {"date": "2026-11-10", "opened": 5, "merged": 9, "closed_nm": 1, "running_open": 172}, {"date": "2026-11-11", "opened": 1, "merged": 3, "closed_nm": 0, "running_open": 170}, {"date": "2026-11-12", "opened": 14, "merged": 4, "closed_nm": 0, "running_open": 180}, {"date": "2026-11-13", "opened": 9, "merged": 2, "closed_nm": 0, "running_open": 187}, {"date": "2026-11-14", "opened": 2, "merged": 3, "closed_nm": 0, "running_open": 186}];
+let chartWindow = 10;
+
+function renderActivityChart() {
+  const data = ACTIVITY.slice(-chartWindow);
+  const container = document.getElementById("chart-bars");
+  const statsEl   = document.getElementById("chart-stats");
+  if (!data.length) { container.innerHTML = '<span style="color:var(--muted);font-size:12px">No activity data</span>'; return; }
+
+  const maxBar  = Math.max(...data.map(d => d.opened + d.merged + d.closed_nm), 1);
+  const maxOpen = Math.max(...data.map(d => d.running_open), 1);
+  const H = 116;
+
+  // Stats summary
+  const totalOpened = data.reduce((s,d) => s + d.opened, 0);
+  const totalMerged = data.reduce((s,d) => s + d.merged, 0);
+  const totalClosed = data.reduce((s,d) => s + d.closed_nm, 0);
+  const netChange   = totalOpened - totalMerged - totalClosed;
+  const currentOpen = data[data.length - 1].running_open;
+  statsEl.innerHTML = `
+    <div class="stat-box"><div class="num" style="color:#58a6ff">${totalOpened}</div><div class="lbl">opened</div></div>
+    <div class="stat-box"><div class="num" style="color:#56d364">${totalMerged}</div><div class="lbl">merged</div></div>
+    <div class="stat-box"><div class="num" style="color:#f85149">${totalClosed}</div><div class="lbl">closed (not merged)</div></div>
+    <div class="stat-box"><div class="num" style="color:${netChange>0?"#f85149":netChange<0?"#56d364":"var(--muted)"}">${netChange>0?"+":""}${netChange}</div><div class="lbl">net backlog change</div></div>
+    <div class="stat-box"><div class="num" style="color:var(--staleness)">${currentOpen}</div><div class="lbl">open now</div></div>
+  `;
+
+  // Bars
+  let html = "";
+  data.forEach((d, i) => {
+    const total  = d.opened + d.merged + d.closed_nm;
+    const hOpen  = total ? Math.max(Math.round((d.opened    / maxBar) * H), d.opened   ? 2 : 0) : 0;
+    const hMerge = total ? Math.max(Math.round((d.merged    / maxBar) * H), d.merged   ? 2 : 0) : 0;
+    const hClose = total ? Math.max(Math.round((d.closed_nm / maxBar) * H), d.closed_nm? 2 : 0) : 0;
+    const label  = d.date.slice(5);
+    html += `<div class="chart-bar-group">
+      <div class="chart-segments" style="height:${H}px">
+        ${hClose ? `<div class="bar-seg bar-closed" style="height:${hClose}px"></div>` : ""}
+        ${hMerge ? `<div class="bar-seg bar-merged" style="height:${hMerge}px"></div>` : ""}
+        ${hOpen  ? `<div class="bar-seg bar-opened" style="height:${hOpen}px"></div>`  : ""}
+      </div>
+      <div class="chart-tooltip">
+        <div><strong>${d.date}</strong></div>
+        <div style="color:#58a6ff">&#9650; Opened: ${d.opened}</div>
+        <div style="color:#56d364">&#10003; Merged: ${d.merged}</div>
+        <div style="color:#f85149">&#10005; Closed: ${d.closed_nm}</div>
+        <div style="color:var(--staleness)">&#9679; Open backlog: ${d.running_open}</div>
+      </div>
+      <div class="chart-date">${label}</div>
+    </div>`;
+  });
+  container.innerHTML = html;
+
+  // SVG open-backlog line
+  requestAnimationFrame(() => {
+    const wrap = container;
+    const W = wrap.offsetWidth;
+    if (!W) return;
+    const barW = W / data.length;
+    const pts  = data.map((d, i) =>
+      `${((i + 0.5) * barW).toFixed(1)},${(H - Math.round((d.running_open / maxOpen) * H)).toFixed(1)}`
+    ).join(" ");
+    // Remove old SVG if any
+    wrap.querySelectorAll("svg").forEach(s => s.remove());
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("width", W);
+    svg.setAttribute("height", H);
+    svg.style.cssText = "position:absolute;top:0;left:0;pointer-events:none;overflow:visible";
+    svg.innerHTML = `
+      <polyline points="${pts}" fill="none" stroke="var(--staleness)" stroke-width="2" stroke-linejoin="round" opacity="0.9"/>
+      ${data.map((d, i) => {
+        const x = ((i + 0.5) * barW).toFixed(1);
+        const y = (H - Math.round((d.running_open / maxOpen) * H)).toFixed(1);
+        return `<circle cx="${x}" cy="${y}" r="3" fill="var(--staleness)" opacity="0.9"/>`;
+      }).join("")}
+    `;
+    wrap.style.position = "relative";
+    wrap.appendChild(svg);
+  });
+}
+
+
+function renderWGBreakdown() {
+  const el = document.getElementById("wg-breakdown");
+  // Count open PRs per WG from current DATA
+  const counts = {};
+  let unclaimed = 0;
+  for (const pr of DATA) {
+    if (pr.wg) counts[pr.wg] = (counts[pr.wg] || 0) + 1;
+    else unclaimed++;
+  }
+  const entries = Object.entries(counts).sort((a,b) => b[1]-a[1]);
+  if (unclaimed) entries.push(["Unclaimed", unclaimed]);
+  const max = Math.max(...entries.map(e=>e[1]), 1);
+  const COLORS = ["#58a6ff","#56d364","#79c0ff","#ffa657","#d2a8ff","#a5d6ff"];
+  let html = "";
+  entries.forEach(([wg, count], i) => {
+    const pct = Math.round((count / max) * 100);
+    const color = wg === "Unclaimed" ? "var(--border)" : COLORS[i % COLORS.length];
+    html += `<div class="wg-bar-row">
+      <div class="wg-bar-label" title="${esc(wg)}">${esc(wg)}</div>
+      <div class="wg-bar-track">
+        <div class="wg-bar-fill" style="width:${pct}%;background:${color}"></div>
+        <span class="wg-bar-count">${count}</span>
+      </div>
+    </div>`;
+  });
+  if (!entries.length) html = '<div style="color:var(--muted);font-size:12px">No WG data</div>';
+  el.innerHTML = html;
+}
+
+function renderCumulativeChart() {
+  const data = ACTIVITY.slice(-chartWindow);
+  const el = document.getElementById("cumulative-chart");
+  document.getElementById("cumul-window").textContent = `— last ${chartWindow}d`;
+  if (!data.length) { el.innerHTML = ""; return; }
+
+  const W = el.getBoundingClientRect().width || el.parentElement.getBoundingClientRect().width || 300;
+  const H = 100;
+  const maxOpen = Math.max(...data.map(d => d.running_open), 1);
+  const minOpen = Math.min(...data.map(d => d.running_open));
+  // Use a padded range so the line isn't squashed at top/bottom
+  const range = Math.max(maxOpen - minOpen, 1);
+  const pad = Math.ceil(range * 0.15);
+  const lo = Math.max(minOpen - pad, 0);
+  const hi = maxOpen + pad;
+
+  const pts = data.map((d, i) => {
+    const x = (i / (data.length - 1 || 1)) * W;
+    const y = H - ((d.running_open - lo) / (hi - lo)) * H;
+    return [x.toFixed(1), y.toFixed(1)];
+  });
+
+  // Gradient fill under the line
+  const areaPath = [
+    `M ${pts[0][0]} ${H}`,
+    ...pts.map(p => `L ${p[0]} ${p[1]}`),
+    `L ${pts[pts.length-1][0]} ${H}`,
+    "Z"
+  ].join(" ");
+
+  const linePath = pts.map((p,i) => `${i===0?"M":"L"} ${p[0]} ${p[1]}`).join(" ");
+
+  // Y axis labels
+  const yLabels = [lo, Math.round((lo+hi)/2), hi].map((v,i) => {
+    const y = H - ((v - lo) / (hi - lo)) * H;
+    return `<text x="0" y="${y.toFixed(1)}" fill="var(--muted)" font-size="9" dominant-baseline="middle">${v}</text>`;
+  }).join("");
+
+  // X axis dates
+  const xLabels = [0, Math.floor(data.length/2), data.length-1].map(i => {
+    if (i >= data.length) return "";
+    const x = (i / (data.length - 1 || 1)) * W;
+    return `<text x="${x.toFixed(1)}" y="${H+12}" fill="var(--muted)" font-size="9" text-anchor="middle">${data[i].date.slice(5)}</text>`;
+  }).join("");
+
+  el.innerHTML = `<svg width="100%" viewBox="0 0 ${W} ${H+18}" preserveAspectRatio="none" style="display:block">
+    <defs>
+      <linearGradient id="cg" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="var(--staleness)" stop-opacity="0.3"/>
+        <stop offset="100%" stop-color="var(--staleness)" stop-opacity="0.02"/>
+      </linearGradient>
+    </defs>
+    <path d="${areaPath}" fill="url(#cg)"/>
+    <path d="${linePath}" fill="none" stroke="var(--staleness)" stroke-width="2" stroke-linejoin="round"/>
+    ${pts.map(p=>`<circle cx="${p[0]}" cy="${p[1]}" r="2.5" fill="var(--staleness)"/>`).join("")}
+    ${yLabels}
+    ${xLabels}
+  </svg>`;
+}
+
+// Slider wiring
+const windowSlider = document.getElementById("day-window");
+const windowLabel  = document.getElementById("day-window-label");
+windowSlider.addEventListener("input", () => {
+  chartWindow = parseInt(windowSlider.value);
+  windowLabel.textContent = chartWindow + (chartWindow === 1 ? " day" : " days");
+  renderActivityChart();
+renderWGBreakdown();
+setTimeout(() => renderCumulativeChart(), 50);
+  renderCumulativeChart();
+});
+
+updateSummary();
+renderActivityChart();
+renderWGBreakdown();
+setTimeout(() => renderCumulativeChart(), 50);
+setTimeout(() => renderTrendChart(), 60);
+renderPulse();
+renderNewPRs();
+renderFocusPanel();
+renderRFCPanel();
+render();
+</script>
+</body>
+</html>
